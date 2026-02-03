@@ -1,0 +1,19 @@
+{
+  "name": "Tropics",
+  "description": "Warm tropical vibes: turquoise sea, golden sand, coral accents",
+  "bg": "#FFF5E6",
+  "text": "#3B2A20",
+  "gradient_color": "#045785",
+  "water": "#17B0C1",
+  "parks": "#7FD18C",
+  "forest": "#5BB16F",
+  "grass": "#A0D48A",
+  "farmland": "#F3E0A7",
+  "road_motorway": "#D95B2A",
+  "road_primary": "#E67A2E",
+  "road_secondary": "#F0A54A",
+  "road_tertiary": "#F6C76B",
+  "road_residential": "#F8E1A5",
+  "railway": "#FF7A5A",
+  "road_default": "#F0A54A"
+}

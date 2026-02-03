@@ -1,0 +1,19 @@
+{
+  "name": "Midnight Teal",
+  "description": "Deep charcoal with refined teal and slate tones",
+  "bg": "#0B1114",
+  "text": "#8FE3D6",
+  "gradient_color": "#0B1114",
+  "water": "#0E2A33",
+  "parks": "#123A3A",
+  "forest": "#0F2F2F",
+  "grass": "#123A3A",
+  "farmland": "#2E3D3A",
+  "road_motorway": "#2DE2C6",
+  "road_primary": "#3FB8AF",
+  "road_secondary": "#2E8F8F",
+  "road_tertiary": "#256B6B",
+  "road_residential": "#1F4F4F",
+  "railway": "#7A7F9A",
+  "road_default": "#256B6B"
+}

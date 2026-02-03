@@ -1,0 +1,22 @@
+{
+  "name": "blade_runner_2019",
+  "description": "Blade Runner inspired smoggy neon city map",
+  "bg": "#0A0B10",
+  "gradient_color": "#1A0F24",
+  "text": "#C9D7E3",
+  "water": "#05060B",
+  "parks": "#12131A",
+  "forest": "#101118",
+  "grass": "#14151D",
+  "farmland": "#0F1016",
+  "road_motorway": "#FFB000",
+  "road_primary": "#FF5C2B",
+  "road_secondary": "#C9462C",
+  "road_tertiary": "#7A3A32",
+  "road_residential": "#3E2A2A",
+  "railway": "#D04EFF",
+  "railway_core": "#F2D9FF",
+  "subtram": "#5DA9FF",
+  "subtram_core": "#D6EBFF",
+  "road_default": "#7A3A32"
+}

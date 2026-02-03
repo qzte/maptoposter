@@ -1,0 +1,22 @@
+{
+  "name": "Aurora Borealis",
+  "description": "Deep arctic night with soft aurora greens, teals, and violet glow",
+  "bg": "#070B12",
+  "text": "#DCE9E6",
+  "gradient_color": "#070B12",
+  "water": "#060A0F",
+  "parks": "#0E1F1A",
+  "forest": "#0B1915",
+  "grass": "#0E1F1A",
+  "farmland": "#141B17",
+  "road_motorway": "#6FFFE9",
+  "road_primary": "#4EDFC3",
+  "road_secondary": "#38B6A8",
+  "road_tertiary": "#7B7CFF",
+  "road_residential": "#4B6F73",
+  "railway": "#B388FF",
+  "railway_core": "#FFEBF9",
+  "subtram": "#B388FF",
+  "subtram_core": "#FFEBF9",
+  "road_default": "#7B7CFF"
+}

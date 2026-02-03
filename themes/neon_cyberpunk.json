@@ -6,10 +6,17 @@
   "gradient_color": "#0D0D1A",
   "water": "#0A0A15",
   "parks": "#151525",
+  "forest": "#151525",
+  "grass": "#151525",
+  "farmland": "#151525",
   "road_motorway": "#FF00FF",
   "road_primary": "#00FFFF",
   "road_secondary": "#00C8C8",
   "road_tertiary": "#0098A0",
   "road_residential": "#006870",
+  "railway": "#EA3680",
+  "railway_core": "#FFEBF9",
+  "subtram": "#BB37EA",
+  "subtram_core": "#E5D6EA",
   "road_default": "#0098A0"
 }

@@ -1,0 +1,22 @@
+{
+  "name": "Graphite Ember",
+  "description": "Dark graphite base with warm mineral highlights",
+  "bg": "#121212",
+  "text": "#F2E6D8",
+  "gradient_color": "#121212",
+  "water": "#0C1014",
+  "parks": "#161B14",
+  "forest": "#141A13",
+  "grass": "#161B14",
+  "farmland": "#1E1A12",
+  "road_motorway": "#FFB703",
+  "road_primary": "#FB8500",
+  "road_secondary": "#E85D04",
+  "road_tertiary": "#D97706",
+  "road_residential": "#8A5A2B",
+  "railway": "#E63946",
+  "railway_core": "#FFEBF9",
+  "subtram": "#E63946",
+  "subtram_core": "#FFEBF9",  
+  "road_default": "#D97706"
+}

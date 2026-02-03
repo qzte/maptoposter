@@ -1,0 +1,30 @@
+{
+  "name": "neurogrid",
+  "description": "High-contrast cyberpunk cartography palette",
+
+  "bg": "#07090F",
+  "gradient_color": "#120A2E",
+
+  "text": "#8FF5FF",
+
+  "water": "#02040A",
+
+  "parks": "#0C1020",
+  "forest": "#0A0E1B",
+  "grass": "#0D1224",
+  "farmland": "#0B0F1E",
+
+  "road_motorway": "#FF005D",
+  "road_primary": "#00E5FF",
+  "road_secondary": "#2A9DFF",
+  "road_tertiary": "#3C5CFF",
+  "road_residential": "#1E2A5A",
+
+  "railway": "#FF8A3D",
+  "railway_core": "#FFE2C6",
+
+  "subtram": "#B16CFF",
+  "subtram_core": "#EFE3FF",
+
+  "road_default": "#3C5CFF"
+}

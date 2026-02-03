@@ -58,6 +58,7 @@ Use these values for `-W` and `-H` to target specific resolutions:
 | **HD Wallpaper** | 1920 x 1080 | 6.4 x 3.6 |
 | **4K Wallpaper** | 3840 x 2160 | 12.8 x 7.2 |
 | **A4 Print** | 2480 x 3508 | 8.3 x 11.7 |
+| **Super Ultra Wide Wallper** | 5120 x 1440 | 17.067 x 4.8 |
 
 ### Examples
 

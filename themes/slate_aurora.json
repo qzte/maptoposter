@@ -1,0 +1,22 @@
+{
+  "name": "Slate Aurora",
+  "description": "Deep charcoal base with cool luminous accents for modern cities",
+  "bg": "#0E1116",
+  "text": "#E4E8EE",
+  "gradient_color": "#0E1116",
+  "water": "#0A0F14",
+  "parks": "#111A17",
+  "forest": "#0E1714",
+  "grass": "#111A17",
+  "farmland": "#1A1C16",
+  "road_motorway": "#9AD1FF",
+  "road_primary": "#5FA8FF",
+  "road_secondary": "#4EC5B0",
+  "road_tertiary": "#6B8CFF",
+  "road_residential": "#4A5D73",
+  "railway": "#C87EFF",
+  "railway_core": "#FFEBF9",
+  "subtram": "#C87EFF",
+  "subtram_core": "#FFEBF9",  
+  "road_default": "#6B8CFF"
+}

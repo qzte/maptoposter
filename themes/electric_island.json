@@ -1,0 +1,22 @@
+{
+  "name": "Electric Island",
+  "description": "Ultra-dark land and sea with vibrant tropical neon infrastructure",
+  "bg": "#0B0E11",
+  "text": "#F5E6C8",
+  "gradient_color": "#0B0E11",
+  "water": "#070A0E",
+  "parks": "#0C1411",
+  "forest": "#0A120F",
+  "grass": "#0C1411",
+  "farmland": "#14130C",
+  "road_motorway": "#FF7A18",
+  "road_primary": "#00E5FF",
+  "road_secondary": "#00C2A8",
+  "road_tertiary": "#1FA2FF",
+  "road_residential": "#3A6EA5",
+  "railway": "#E83F6F",
+  "railway_core": "#FFEBF9",
+  "subtram": "#E83F6F",
+  "subtram_core": "#FFEBF9",
+  "road_default": "#1FA2FF"
+}
