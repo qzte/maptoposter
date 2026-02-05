@@ -1,6 +1,7 @@
+import json
 import threading
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
 import create_map_poster as poster
@@ -105,7 +106,9 @@ class PosterApp:
         options.grid(row=11, column=0, columnspan=2, sticky=tk.W, pady=8)
         ttk.Checkbutton(options, text="Gerar todos os temas", variable=self.all_themes_var).pack(side=tk.LEFT, padx=(0, 16))
         ttk.Checkbutton(options, text="Atualizar cache", variable=self.refresh_cache_var).pack(side=tk.LEFT, padx=(0, 16))
-        ttk.Button(options, text="Listar temas", command=self.show_themes).pack(side=tk.LEFT)
+        ttk.Button(options, text="Listar temas", command=self.show_themes).pack(side=tk.LEFT, padx=(0, 16))
+        ttk.Button(options, text="Salvar configuração", command=self.save_config).pack(side=tk.LEFT, padx=(0, 16))
+        ttk.Button(options, text="Carregar configuração", command=self.load_config).pack(side=tk.LEFT)
 
         form.columnconfigure(1, weight=1)
 
@@ -189,6 +192,92 @@ class PosterApp:
         themes = ", ".join(self.theme_names)
         self.log(f"Temas disponíveis: {themes}")
         messagebox.showinfo("Temas disponíveis", themes)
+
+    def _build_config(self) -> dict:
+        enabled_layers = [key for key, _, _ in self.layer_options if self.layer_vars[key].get()]
+        return {
+            "city": self.city_var.get().strip(),
+            "country": self.country_var.get().strip(),
+            "coords": self.coords_var.get().strip(),
+            "name_label": self.name_label_var.get().strip(),
+            "country_label": self.country_label_var.get().strip(),
+            "distance": self.distance_var.get().strip(),
+            "width_mm": self.width_var.get().strip(),
+            "height_mm": self.height_var.get().strip(),
+            "dpi": self.dpi_var.get().strip(),
+            "theme": self.theme_var.get().strip(),
+            "format": self.format_var.get().strip(),
+            "all_themes": self.all_themes_var.get(),
+            "refresh_cache": self.refresh_cache_var.get(),
+            "enabled_layers": enabled_layers,
+            "version": 1,
+        }
+
+    def save_config(self) -> None:
+        file_path = filedialog.asksaveasfilename(
+            title="Salvar configuração",
+            defaultextension=".json",
+            filetypes=[("Configuração do pôster", "*.json"), ("Todos os arquivos", "*.*")],
+        )
+        if not file_path:
+            return
+        config = self._build_config()
+        try:
+            with open(file_path, "w", encoding="utf-8") as handle:
+                json.dump(config, handle, ensure_ascii=False, indent=2)
+            self.log(f"Configuração salva em: {file_path}")
+            messagebox.showinfo("Configuração salva", "Configuração salva com sucesso.")
+        except OSError as exc:
+            self.log(f"Erro ao salvar configuração: {exc}")
+            messagebox.showerror("Erro ao salvar", str(exc))
+
+    def load_config(self) -> None:
+        file_path = filedialog.askopenfilename(
+            title="Carregar configuração",
+            filetypes=[("Configuração do pôster", "*.json"), ("Todos os arquivos", "*.*")],
+        )
+        if not file_path:
+            return
+        try:
+            with open(file_path, "r", encoding="utf-8") as handle:
+                config = json.load(handle)
+        except (OSError, json.JSONDecodeError) as exc:
+            self.log(f"Erro ao carregar configuração: {exc}")
+            messagebox.showerror("Erro ao carregar", str(exc))
+            return
+
+        self.city_var.set(str(config.get("city", "")))
+        self.country_var.set(str(config.get("country", "")))
+        self.coords_var.set(str(config.get("coords", "")))
+        self.name_label_var.set(str(config.get("name_label", "")))
+        self.country_label_var.set(str(config.get("country_label", "")))
+        self.distance_var.set(str(config.get("distance", self.distance_var.get())))
+        self.width_var.set(str(config.get("width_mm", self.width_var.get())))
+        self.height_var.set(str(config.get("height_mm", self.height_var.get())))
+        self.dpi_var.set(str(config.get("dpi", self.dpi_var.get())))
+
+        theme = config.get("theme")
+        if isinstance(theme, str) and theme in self.theme_names:
+            self.theme_var.set(theme)
+        elif theme:
+            self.log(f"Tema '{theme}' não encontrado. Mantendo tema atual.")
+
+        output_format = config.get("format")
+        if output_format in {"png", "svg", "pdf"}:
+            self.format_var.set(output_format)
+        elif output_format:
+            self.log(f"Formato '{output_format}' inválido. Mantendo formato atual.")
+
+        self.all_themes_var.set(bool(config.get("all_themes", False)))
+        self.refresh_cache_var.set(bool(config.get("refresh_cache", False)))
+
+        enabled_layers = config.get("enabled_layers")
+        if isinstance(enabled_layers, list):
+            enabled_set = {layer for layer in enabled_layers if isinstance(layer, str)}
+            for key, _, _ in self.layer_options:
+                self.layer_vars[key].set(key in enabled_set)
+        self.log(f"Configuração carregada de: {file_path}")
+        messagebox.showinfo("Configuração carregada", "Configuração carregada com sucesso.")
 
     def start_generation(self) -> None:
         if self.generate_button["state"] == tk.DISABLED:
