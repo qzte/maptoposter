@@ -12,6 +12,8 @@ class PosterApp:
         self.root = root
         self.root.title("City Map Poster Generator")
         self.root.geometry("780x600")
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
 
         self.theme_names = get_available_themes()
         if not self.theme_names:
@@ -23,18 +25,20 @@ class PosterApp:
 
     def _build_ui(self) -> None:
         main = ttk.Frame(self.root, padding=12)
-        main.pack(fill=tk.BOTH, expand=True)
+        main.grid(row=0, column=0, sticky=tk.NSEW)
+        main.columnconfigure(0, weight=1)
+        main.rowconfigure(3, weight=1)
 
         form = ttk.LabelFrame(main, text="Configurações", padding=12)
-        form.pack(fill=tk.X)
+        form.grid(row=0, column=0, sticky=tk.EW)
 
         self.city_var = tk.StringVar()
         self.country_var = tk.StringVar()
         self.name_label_var = tk.StringVar()
         self.country_label_var = tk.StringVar()
         self.distance_var = tk.StringVar(value="29000")
-        self.width_var = tk.StringVar(value="12")
-        self.height_var = tk.StringVar(value="16")
+        self.width_var = tk.StringVar(value="305")
+        self.height_var = tk.StringVar(value="406")
         self.dpi_var = tk.StringVar(value="300")
         self.theme_var = tk.StringVar(value=self.theme_names[0])
         self.format_var = tk.StringVar(value="png")
@@ -55,8 +59,8 @@ class PosterApp:
         format_combo.grid(row=5, column=1, sticky=tk.EW, pady=6)
 
         self._add_row(form, 6, "Distância (m)", self.distance_var)
-        self._add_row(form, 7, "Largura (pol)", self.width_var)
-        self._add_row(form, 8, "Altura (pol)", self.height_var)
+        self._add_row(form, 7, "Largura (mm)", self.width_var)
+        self._add_row(form, 8, "Altura (mm)", self.height_var)
         self._add_row(form, 9, "DPI (png)", self.dpi_var)
 
         options = ttk.Frame(form)
@@ -68,23 +72,34 @@ class PosterApp:
         form.columnconfigure(1, weight=1)
 
         actions = ttk.Frame(main, padding=(0, 12, 0, 12))
-        actions.pack(fill=tk.X)
+        actions.grid(row=1, column=0, sticky=tk.EW)
         self.generate_button = ttk.Button(actions, text="Gerar pôster", command=self.start_generation)
         self.generate_button.pack(side=tk.RIGHT)
 
         tips = ttk.LabelFrame(main, text="Dicas rápidas", padding=8)
-        tips.pack(fill=tk.X)
+        tips.grid(row=2, column=0, sticky=tk.EW)
         tips_text = (
             "Distância sugerida: 4000–6000m (pequenas), 8000–12000m (médias), "
             "15000–20000m (grandes).\n"
-            "Resolução 300 DPI: Instagram 3.6x3.6, A4 8.3x11.7, 4K 12.8x7.2."
+            "Resolução 300 DPI: Instagram 91x91 mm, A4 210x297 mm, 4K 325x183 mm."
         )
-        ttk.Label(tips, text=tips_text, justify=tk.LEFT, wraplength=720).pack(anchor=tk.W)
+        self.tips_label = ttk.Label(tips, text=tips_text, justify=tk.LEFT, wraplength=720)
+        self.tips_label.pack(anchor=tk.W, fill=tk.X)
 
         log_frame = ttk.LabelFrame(main, text="Logs", padding=8)
-        log_frame.pack(fill=tk.BOTH, expand=True)
+        log_frame.grid(row=3, column=0, sticky=tk.NSEW)
+        log_frame.columnconfigure(0, weight=1)
+        log_frame.rowconfigure(0, weight=1)
         self.log_text = ScrolledText(log_frame, height=12, state=tk.DISABLED)
-        self.log_text.pack(fill=tk.BOTH, expand=True)
+        self.log_text.grid(row=0, column=0, sticky=tk.NSEW)
+
+        self.root.bind("<Configure>", self._on_resize)
+
+    def _on_resize(self, event: tk.Event) -> None:
+        if event.widget is self.root:
+            padding = 64
+            wrap = max(200, event.width - padding)
+            self.tips_label.configure(wraplength=wrap)
 
     def _add_row(self, parent: ttk.Frame, row: int, label: str, variable: tk.StringVar) -> None:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky=tk.W, pady=6)
@@ -122,8 +137,10 @@ class PosterApp:
                 raise ValueError("Cidade e país são obrigatórios.")
 
             distance = int(self.distance_var.get())
-            width = float(self.width_var.get())
-            height = float(self.height_var.get())
+            width_mm = float(self.width_var.get())
+            height_mm = float(self.height_var.get())
+            width = width_mm / 25.4
+            height = height_mm / 25.4
             dpi = int(self.dpi_var.get())
             output_format = self.format_var.get()
 
