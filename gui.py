@@ -11,7 +11,8 @@ class PosterApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("City Map Poster Generator")
-        self.root.geometry("780x720")
+        self.root.geometry("860x820")
+        self.root.minsize(780, 720)
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
 
@@ -24,10 +25,24 @@ class PosterApp:
         self._build_ui()
 
     def _build_ui(self) -> None:
-        main = ttk.Frame(self.root, padding=12)
-        main.grid(row=0, column=0, sticky=tk.NSEW)
+        outer = ttk.Frame(self.root)
+        outer.grid(row=0, column=0, sticky=tk.NSEW)
+        outer.columnconfigure(0, weight=1)
+        outer.rowconfigure(0, weight=1)
+
+        self.canvas = tk.Canvas(outer, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(outer, orient=tk.VERTICAL, command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=scrollbar.set)
+        self.canvas.grid(row=0, column=0, sticky=tk.NSEW)
+        scrollbar.grid(row=0, column=1, sticky=tk.NS)
+
+        main = ttk.Frame(self.canvas, padding=12)
+        self._canvas_window = self.canvas.create_window((0, 0), window=main, anchor=tk.NW)
         main.columnconfigure(0, weight=1)
         main.rowconfigure(5, weight=1)
+        main.bind("<Configure>", self._update_scrollregion)
+        self.canvas.bind("<Configure>", self._update_canvas_width)
+        self._bind_mousewheel(self.canvas)
 
         form = ttk.LabelFrame(main, text="Configurações", padding=12)
         form.grid(row=0, column=0, sticky=tk.EW)
@@ -150,6 +165,32 @@ class PosterApp:
         self.log_text.grid(row=0, column=0, sticky=tk.NSEW)
 
         self.root.bind("<Configure>", self._on_resize)
+
+    def _bind_mousewheel(self, widget: tk.Widget) -> None:
+        def on_enter(_: tk.Event) -> None:
+            widget.bind_all("<MouseWheel>", self._on_mousewheel)
+            widget.bind_all("<Button-4>", self._on_mousewheel)
+            widget.bind_all("<Button-5>", self._on_mousewheel)
+
+        def on_leave(_: tk.Event) -> None:
+            widget.unbind_all("<MouseWheel>")
+            widget.unbind_all("<Button-4>")
+            widget.unbind_all("<Button-5>")
+
+        widget.bind("<Enter>", on_enter)
+        widget.bind("<Leave>", on_leave)
+
+    def _on_mousewheel(self, event: tk.Event) -> None:
+        if event.num == 4 or event.delta > 0:
+            self.canvas.yview_scroll(-1, "units")
+        elif event.num == 5 or event.delta < 0:
+            self.canvas.yview_scroll(1, "units")
+
+    def _update_scrollregion(self, _: tk.Event) -> None:
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def _update_canvas_width(self, event: tk.Event) -> None:
+        self.canvas.itemconfigure(self._canvas_window, width=event.width)
 
     def _on_resize(self, event: tk.Event) -> None:
         if event.widget is self.root:
