@@ -20,6 +20,16 @@ WATER_POLY_DIR = Path("cache/water_polygons")
 
 THEME = dict[str, str]()  # Will be loaded later
 
+# OSM Highway Types:
+# - Road Hierarchy (low → high): path/track/footway/cycleway → service → residential/living_street/unclassified
+#   → tertiary → secondary → primary → trunk → motorway (and *_link variants).
+# Typography Positioning:
+# - Map typography is added after layers/gradients via add_text/add_attribution with a font scale based on
+#   the smaller poster dimension to preserve balance across portrait/landscape outputs.
+# Useful OSMnx Patterns:
+# - Project graph/GeoDataFrames to a metric CRS before distance-based cropping or linewidth scaling.
+# - Use graph_to_gdfs for styling edges and normalize list-like highway tags to a single value.
+
 def generate_output_filename(city, theme_name, output_format):
     """
     Generate unique output filename with city, theme, and datetime.
@@ -136,12 +146,21 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
     layers = [
         ("street network",  fetch_graph, {}),
         ("water",           fetch_features, {"tags": {'natural': ['water', 'bay', 'strait'], 'waterway': ['riverbank', 'dock', 'canal']},"name": 'water'}),
-        ("rivers",          fetch_features, {"tags": {'waterway': ['river']},"name": 'rivers'}),
+        ("rivers",          fetch_features, {"tags": {'waterway': ['river', 'stream']},"name": 'rivers'}),
         ("coastline",       fetch_features, {"tags": {'natural': 'coastline'},"name": 'coast'}),
         ("oceans",          fetch_ocean_polygons, {"coastline": lambda results: results.get("coastline")}),
         ("forests",         fetch_features, {"tags": {"natural":["wood"],"landuse":["forest","logging"]},"name": "forest"}),
         ("green spaces",    fetch_features, {"tags": {"natural":["grassland"],"landuse":["grass","recreation_ground","religious","village_green","greenery","greenfield","meadow", "vineyard"],"leisure":["park","garden"]},"name": "grass"}),
         ("farmland",        fetch_features, {"tags": {"landuse":["farmland"],"natural":["heath", "scrub"]},"name": "farmland"}),
+        ("wetlands",        fetch_features, {"tags": {"natural":["wetland"],"landuse":["salt_pond"]},"name": "wetlands"}),
+        ("beaches",         fetch_features, {"tags": {"natural":["beach","sand"]},"name": "beaches"}),
+        ("industrial",      fetch_features, {"tags": {"landuse":["industrial","commercial","construction"]},"name": "industrial"}),
+        ("residential",     fetch_features, {"tags": {"landuse":["residential"]},"name": "residential"}),
+        ("buildings",       fetch_features, {"tags": {"building": True},"name": "buildings"}),
+        ("parking",         fetch_features, {"tags": {"amenity":["parking"],"parking":["surface","multi-storey","underground"]},"name": "parking"}),
+        ("sports",          fetch_features, {"tags": {"leisure":["stadium","sports_centre","pitch"]},"name": "sports"}),
+        ("aerodrome",       fetch_features, {"tags": {"aeroway":["aerodrome"]},"name": "aerodrome"}),
+        ("runways",         fetch_features, {"tags": {"aeroway":["runway","taxiway"]},"name": "runways"}),
         ("railways",        fetch_features, {"tags": {"railway": ["rail", "narrow_gauge", "monorail", "light_rail"]},"name": "railways"}),
         ("subtram",         fetch_features, {"tags": {"railway": ["subway", "funicular", "tram"]},"name": "subtram"}),
     ]
@@ -159,8 +178,20 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
     if G is None: raise RuntimeError("Failed to retrieve street network data.")
 
     water, rivers, oceans = results["water"], results["rivers"], results["oceans"]
-    forests, grass, farmland = results["forests"], results["green spaces"], results["farmland"]
-    railways, subtram = results["railways"], results["subtram"]
+    forests = results["forests"]
+    grass = results["green spaces"]
+    farmland = results["farmland"]
+    wetlands = results["wetlands"]
+    beaches = results["beaches"]
+    industrial = results["industrial"]
+    residential = results["residential"]
+    buildings = results["buildings"]
+    parking = results["parking"]
+    sports = results["sports"]
+    aerodrome = results["aerodrome"]
+    runways = results["runways"]
+    railways = results["railways"]
+    subtram = results["subtram"]
 
     # 2. Setup Plot
     print("Rendering map...")
@@ -186,15 +217,24 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
     # --- Layer definitions for plotting ---
     print("Adding layers...")
     plot_layers = [
-      # (layer_key, layer_data,   allowed_geom_types,                  facecolor / color,                                  linewidth,   zorder)
-        ("ocean",   oceans,       ['Polygon','MultiPolygon'],          THEME['water'],                                     None,        0),
-        ("water",   water,        ['Polygon','MultiPolygon'],          THEME['water'],                                     None,        2),
-        ("river",   rivers,       ['LineString','MultiLineString'],    THEME['water'],                                     2.0,         3),
-        ("forest",  forests,      ['Polygon','MultiPolygon'],          THEME.get('forest', THEME.get('parks')),            None,        1),
-        ("grass",   grass,        ['Polygon','MultiPolygon'],          THEME.get('grass', THEME.get('parks')),             None,        1),
-        ("farmland",farmland,     ['Polygon','MultiPolygon'],          THEME.get('farmland', THEME.get('parks')),          None,        1),
-        ("railway", railways,     ['LineString','MultiLineString'],    THEME.get('railway', THEME.get('road_primary')),    1.0,         6.2),
-        ("subtram", subtram,     ['LineString','MultiLineString'],     THEME.get('subtram', THEME.get('road_primary')),    0.8,         6)
+      # (layer_key, layer_data,   allowed_geom_types,                  facecolor / color,                                          linewidth,   zorder)
+        ("ocean",      oceans,      ['Polygon','MultiPolygon'],          THEME['water'],                                             None,        0),
+        ("water",      water,       ['Polygon','MultiPolygon'],          THEME['water'],                                             None,        2),
+        ("river",      rivers,      ['LineString','MultiLineString'],    THEME['water'],                                             2.0,         3),
+        ("forest",     forests,     ['Polygon','MultiPolygon'],          THEME.get('forest', THEME.get('parks')),                    None,        1),
+        ("grass",      grass,       ['Polygon','MultiPolygon'],          THEME.get('grass', THEME.get('parks')),                     None,        1),
+        ("farmland",   farmland,    ['Polygon','MultiPolygon'],          THEME.get('farmland', THEME.get('parks')),                  None,        1),
+        ("wetlands",   wetlands,    ['Polygon','MultiPolygon'],          THEME.get('wetlands', THEME.get('parks')),                  None,        1),
+        ("beaches",    beaches,     ['Polygon','MultiPolygon'],          THEME.get('beach', THEME.get('parks')),                     None,        1),
+        ("industrial", industrial,  ['Polygon','MultiPolygon'],          THEME.get('industrial', THEME.get('parks')),                None,        1),
+        ("residential",residential,['Polygon','MultiPolygon'],           THEME.get('residential', THEME.get('parks')),               None,        1),
+        ("buildings",  buildings,   ['Polygon','MultiPolygon'],          THEME.get('building', THEME.get('road_default')),           None,        4),
+        ("parking",    parking,     ['Polygon','MultiPolygon'],          THEME.get('parking', THEME.get('parks')),                   None,        3.5),
+        ("sports",     sports,      ['Polygon','MultiPolygon'],          THEME.get('sports', THEME.get('parks')),                    None,        3.5),
+        ("aerodrome",  aerodrome,   ['Polygon','MultiPolygon'],          THEME.get('aerodrome', THEME.get('parks')),                 None,        3),
+        ("runway",     runways,     ['LineString','MultiLineString'],    THEME.get('runway', THEME.get('road_primary')),             1.4,         6.1),
+        ("railway",    railways,    ['LineString','MultiLineString'],    THEME.get('railway', THEME.get('road_primary')),            1.0,         6.2),
+        ("subtram",    subtram,     ['LineString','MultiLineString'],    THEME.get('subtram', THEME.get('road_primary')),            0.8,         6)
     ]
 
     # --- Plot all layers in a loop ---

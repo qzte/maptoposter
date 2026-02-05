@@ -8,10 +8,31 @@ from map_poster.theme_management import get_available_themes, load_theme
 
 
 class PosterApp:
+    OSMNX_LAYERS = [
+        "water (natural=water/bay/strait, waterway=riverbank/dock/canal)",
+        "rivers (waterway=river/stream)",
+        "coastline (natural=coastline)",
+        "forests (natural=wood, landuse=forest/logging)",
+        "green spaces (natural=grassland, landuse=grass/recreation_ground/greenfield/meadow/vineyard, leisure=park/garden)",
+        "farmland (landuse=farmland, natural=heath/scrub)",
+        "wetlands (natural=wetland, landuse=salt_pond)",
+        "beaches (natural=beach/sand)",
+        "industrial (landuse=industrial/commercial/construction)",
+        "residential (landuse=residential)",
+        "buildings (building=*)",
+        "parking (amenity=parking, parking=surface/multi-storey/underground)",
+        "sports (leisure=stadium/sports_centre/pitch)",
+        "aerodrome (aeroway=aerodrome)",
+        "runways (aeroway=runway/taxiway)",
+        "railways (rail/narrow_gauge/monorail/light_rail)",
+        "subtram (subway/funicular/tram)",
+    ]
+
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("City Map Poster Generator")
-        self.root.geometry("780x600")
+        self.root.geometry("900x700")
+        self.root.minsize(760, 600)
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
 
@@ -27,7 +48,7 @@ class PosterApp:
         main = ttk.Frame(self.root, padding=12)
         main.grid(row=0, column=0, sticky=tk.NSEW)
         main.columnconfigure(0, weight=1)
-        main.rowconfigure(4, weight=1)
+        main.rowconfigure(5, weight=1)
 
         form = ttk.LabelFrame(main, text="Configurações", padding=12)
         form.grid(row=0, column=0, sticky=tk.EW)
@@ -67,10 +88,12 @@ class PosterApp:
         self._add_row(form, 9, "DPI (png)", self.dpi_var)
 
         options = ttk.Frame(form)
-        options.grid(row=10, column=0, columnspan=2, sticky=tk.W, pady=8)
-        ttk.Checkbutton(options, text="Gerar todos os temas", variable=self.all_themes_var).pack(side=tk.LEFT, padx=(0, 16))
-        ttk.Checkbutton(options, text="Atualizar cache", variable=self.refresh_cache_var).pack(side=tk.LEFT, padx=(0, 16))
-        ttk.Button(options, text="Listar temas", command=self.show_themes).pack(side=tk.LEFT)
+        options.grid(row=10, column=0, columnspan=2, sticky=tk.EW, pady=8)
+        options.columnconfigure(2, weight=1)
+        ttk.Checkbutton(options, text="Gerar todos os temas", variable=self.all_themes_var).grid(row=0, column=0, sticky=tk.W, padx=(0, 16))
+        ttk.Checkbutton(options, text="Atualizar cache", variable=self.refresh_cache_var).grid(row=0, column=1, sticky=tk.W, padx=(0, 16))
+        ttk.Button(options, text="Listar temas", command=self.show_themes).grid(row=0, column=2, sticky=tk.W)
+        ttk.Button(options, text="Listar camadas OSMnx", command=self.show_osmnx_layers).grid(row=0, column=3, sticky=tk.W, padx=(12, 0))
 
         form.columnconfigure(1, weight=1)
 
@@ -92,8 +115,15 @@ class PosterApp:
         self.tips_label = ttk.Label(tips, text=tips_text, justify=tk.LEFT, wraplength=720)
         self.tips_label.pack(anchor=tk.W, fill=tk.X)
 
+        osmnx_frame = ttk.LabelFrame(main, text="Camadas OSMnx disponíveis", padding=8)
+        osmnx_frame.grid(row=3, column=0, sticky=tk.EW)
+        osmnx_frame.columnconfigure(0, weight=1)
+        self.osmnx_list = ScrolledText(osmnx_frame, height=6, state=tk.DISABLED)
+        self.osmnx_list.grid(row=0, column=0, sticky=tk.EW)
+        self._populate_osmnx_layers()
+
         reference_frame = ttk.LabelFrame(main, text="Referências opcionais", padding=8)
-        reference_frame.grid(row=3, column=0, sticky=tk.EW)
+        reference_frame.grid(row=4, column=0, sticky=tk.EW)
         ttk.Checkbutton(
             reference_frame,
             text="OSM Highway Types → Road Hierarchy",
@@ -111,7 +141,7 @@ class PosterApp:
         ).pack(anchor=tk.W)
 
         log_frame = ttk.LabelFrame(main, text="Logs", padding=8)
-        log_frame.grid(row=4, column=0, sticky=tk.NSEW)
+        log_frame.grid(row=5, column=0, sticky=tk.NSEW)
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
         self.log_text = ScrolledText(log_frame, height=12, state=tk.DISABLED)
@@ -121,9 +151,10 @@ class PosterApp:
 
     def _on_resize(self, event: tk.Event) -> None:
         if event.widget is self.root:
-            padding = 64
-            wrap = max(200, event.width - padding)
+            padding = 96
+            wrap = max(240, event.width - padding)
             self.tips_label.configure(wraplength=wrap)
+            self.osmnx_list.configure(width=max(40, int(event.width / 12)))
 
     def _add_row(self, parent: ttk.Frame, row: int, label: str, variable: tk.StringVar) -> None:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky=tk.W, pady=6)
@@ -163,10 +194,24 @@ class PosterApp:
 
         self.root.after(0, append)
 
+    def _populate_osmnx_layers(self) -> None:
+        self.osmnx_list.configure(state=tk.NORMAL)
+        self.osmnx_list.delete("1.0", tk.END)
+        for layer in self.OSMNX_LAYERS:
+            self.osmnx_list.insert(tk.END, f"• {layer}\n")
+        self.osmnx_list.configure(state=tk.DISABLED)
+
     def show_themes(self) -> None:
         themes = ", ".join(self.theme_names)
         self.log(f"Temas disponíveis: {themes}")
         messagebox.showinfo("Temas disponíveis", themes)
+
+    def show_osmnx_layers(self) -> None:
+        layers = "\n".join(f"- {layer}" for layer in self.OSMNX_LAYERS)
+        self.log("Camadas OSMnx disponíveis:")
+        for layer in self.OSMNX_LAYERS:
+            self.log(f"- {layer}")
+        messagebox.showinfo("Camadas OSMnx disponíveis", layers)
 
     def start_generation(self) -> None:
         if self.generate_button["state"] == tk.DISABLED:
