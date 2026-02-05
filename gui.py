@@ -11,7 +11,7 @@ class PosterApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("City Map Poster Generator")
-        self.root.geometry("780x600")
+        self.root.geometry("780x720")
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
 
@@ -27,7 +27,7 @@ class PosterApp:
         main = ttk.Frame(self.root, padding=12)
         main.grid(row=0, column=0, sticky=tk.NSEW)
         main.columnconfigure(0, weight=1)
-        main.rowconfigure(4, weight=1)
+        main.rowconfigure(5, weight=1)
 
         form = ttk.LabelFrame(main, text="Configurações", padding=12)
         form.grid(row=0, column=0, sticky=tk.EW)
@@ -47,6 +47,27 @@ class PosterApp:
         self.osm_hierarchy_var = tk.BooleanVar(value=False)
         self.typography_position_var = tk.BooleanVar(value=False)
         self.osmnx_patterns_var = tk.BooleanVar(value=False)
+        self.layer_vars: dict[str, tk.BooleanVar] = {}
+        self.layer_options = [
+            ("roads", "Ruas (hierarquia)", True),
+            ("water", "Água (lagos/mar)", True),
+            ("rivers", "Rios", True),
+            ("oceans", "Oceanos", True),
+            ("forests", "Florestas", True),
+            ("green_spaces", "Áreas verdes", True),
+            ("farmland", "Áreas agrícolas", True),
+            ("wetlands", "Zonas úmidas", True),
+            ("beaches", "Praias", True),
+            ("industrial", "Industrial", True),
+            ("residential", "Residencial", True),
+            ("buildings", "Edificações", True),
+            ("parking", "Estacionamentos", True),
+            ("sports", "Esportes", True),
+            ("aerodrome", "Aeródromos", True),
+            ("runways", "Pistas", True),
+            ("railways", "Ferrovias", True),
+            ("subtram", "Metrô/Tram", True),
+        ]
 
         self._add_row(form, 0, "Cidade", self.city_var)
         self._add_row(form, 1, "País", self.country_var)
@@ -92,8 +113,19 @@ class PosterApp:
         self.tips_label = ttk.Label(tips, text=tips_text, justify=tk.LEFT, wraplength=720)
         self.tips_label.pack(anchor=tk.W, fill=tk.X)
 
+        layers_frame = ttk.LabelFrame(main, text="Camadas OSMnx", padding=8)
+        layers_frame.grid(row=3, column=0, sticky=tk.EW)
+        layers_frame.columnconfigure(0, weight=1)
+        layers_frame.columnconfigure(1, weight=1)
+        for index, (key, label, default) in enumerate(self.layer_options):
+            var = tk.BooleanVar(value=default)
+            self.layer_vars[key] = var
+            column = index % 2
+            row = index // 2
+            ttk.Checkbutton(layers_frame, text=label, variable=var).grid(row=row, column=column, sticky=tk.W)
+
         reference_frame = ttk.LabelFrame(main, text="Referências opcionais", padding=8)
-        reference_frame.grid(row=3, column=0, sticky=tk.EW)
+        reference_frame.grid(row=4, column=0, sticky=tk.EW)
         ttk.Checkbutton(
             reference_frame,
             text="OSM Highway Types → Road Hierarchy",
@@ -111,7 +143,7 @@ class PosterApp:
         ).pack(anchor=tk.W)
 
         log_frame = ttk.LabelFrame(main, text="Logs", padding=8)
-        log_frame.grid(row=4, column=0, sticky=tk.NSEW)
+        log_frame.grid(row=5, column=0, sticky=tk.NSEW)
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
         self.log_text = ScrolledText(log_frame, height=12, state=tk.DISABLED)
@@ -195,6 +227,12 @@ class PosterApp:
 
             themes_to_generate = self.theme_names if self.all_themes_var.get() else [self.theme_var.get()]
             self.log(f"Temas selecionados: {', '.join(themes_to_generate)}")
+            selected_layers = [key for key, _, _ in self.layer_options if self.layer_vars[key].get()]
+            selected_labels = [label for key, label, _ in self.layer_options if self.layer_vars[key].get()]
+            if selected_labels:
+                self.log(f"Camadas OSMnx: {', '.join(selected_labels)}")
+            else:
+                self.log("Camadas OSMnx: nenhuma")
             coords = poster.get_coordinates(city, country, self.refresh_cache_var.get())
 
             for theme_name in themes_to_generate:
@@ -214,6 +252,7 @@ class PosterApp:
                     country_label=self.country_label_var.get().strip() or None,
                     name_label=self.name_label_var.get().strip() or None,
                     refresh_cache=self.refresh_cache_var.get(),
+                    enabled_layers=selected_layers,
                 )
 
             self.log("Geração concluída com sucesso!")
