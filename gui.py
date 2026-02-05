@@ -49,6 +49,7 @@ class PosterApp:
 
         self.city_var = tk.StringVar()
         self.country_var = tk.StringVar()
+        self.coords_var = tk.StringVar()
         self.name_label_var = tk.StringVar()
         self.country_label_var = tk.StringVar()
         self.distance_var = tk.StringVar(value="29000")
@@ -83,24 +84,25 @@ class PosterApp:
 
         self._add_row(form, 0, "Cidade", self.city_var)
         self._add_row(form, 1, "País", self.country_var)
-        self._add_row(form, 2, "Nome exibido", self.name_label_var)
-        self._add_row(form, 3, "País exibido", self.country_label_var)
+        self._add_row(form, 2, "Coordenadas (lat, lon)", self.coords_var)
+        self._add_row(form, 3, "Nome exibido", self.name_label_var)
+        self._add_row(form, 4, "País exibido", self.country_label_var)
 
-        ttk.Label(form, text="Tema").grid(row=4, column=0, sticky=tk.W, pady=6)
+        ttk.Label(form, text="Tema").grid(row=5, column=0, sticky=tk.W, pady=6)
         theme_combo = ttk.Combobox(form, textvariable=self.theme_var, values=self.theme_names, state="readonly")
-        theme_combo.grid(row=4, column=1, sticky=tk.EW, pady=6)
+        theme_combo.grid(row=5, column=1, sticky=tk.EW, pady=6)
 
-        ttk.Label(form, text="Formato").grid(row=5, column=0, sticky=tk.W, pady=6)
+        ttk.Label(form, text="Formato").grid(row=6, column=0, sticky=tk.W, pady=6)
         format_combo = ttk.Combobox(form, textvariable=self.format_var, values=["png", "svg", "pdf"], state="readonly")
-        format_combo.grid(row=5, column=1, sticky=tk.EW, pady=6)
+        format_combo.grid(row=6, column=1, sticky=tk.EW, pady=6)
 
-        self._add_row(form, 6, "Distância (m)", self.distance_var)
-        self._add_row(form, 7, "Largura (mm)", self.width_var)
-        self._add_row(form, 8, "Altura (mm)", self.height_var)
-        self._add_row(form, 9, "DPI (png)", self.dpi_var)
+        self._add_row(form, 7, "Distância (m)", self.distance_var)
+        self._add_row(form, 8, "Largura (mm)", self.width_var)
+        self._add_row(form, 9, "Altura (mm)", self.height_var)
+        self._add_row(form, 10, "DPI (png)", self.dpi_var)
 
         options = ttk.Frame(form)
-        options.grid(row=10, column=0, columnspan=2, sticky=tk.W, pady=8)
+        options.grid(row=11, column=0, columnspan=2, sticky=tk.W, pady=8)
         ttk.Checkbutton(options, text="Gerar todos os temas", variable=self.all_themes_var).pack(side=tk.LEFT, padx=(0, 16))
         ttk.Checkbutton(options, text="Atualizar cache", variable=self.refresh_cache_var).pack(side=tk.LEFT, padx=(0, 16))
         ttk.Button(options, text="Listar temas", command=self.show_themes).pack(side=tk.LEFT)
@@ -161,6 +163,19 @@ class PosterApp:
         entry = ttk.Entry(parent, textvariable=variable)
         entry.grid(row=row, column=1, sticky=tk.EW, pady=6)
 
+    def _parse_coordinates(self, value: str) -> tuple[float, float]:
+        parts = [part.strip() for part in value.split(",")]
+        if len(parts) != 2:
+            raise ValueError("Informe coordenadas no formato: lat, lon.")
+        try:
+            lat = float(parts[0])
+            lon = float(parts[1])
+        except ValueError as exc:
+            raise ValueError("Coordenadas inválidas. Use números decimais.") from exc
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            raise ValueError("Coordenadas fora do intervalo permitido.")
+        return (lat, lon)
+
     def log(self, message: str) -> None:
         def append() -> None:
             self.log_text.configure(state=tk.NORMAL)
@@ -188,8 +203,18 @@ class PosterApp:
         try:
             city = self.city_var.get().strip()
             country = self.country_var.get().strip()
-            if not city or not country:
-                raise ValueError("Cidade e país são obrigatórios.")
+            coords_input = self.coords_var.get().strip()
+            if coords_input:
+                coords = self._parse_coordinates(coords_input)
+                if not city:
+                    city = self.name_label_var.get().strip() or "Coordenadas"
+                if not country:
+                    country = self.country_label_var.get().strip()
+                self.log(f"Usando coordenadas: {coords[0]}, {coords[1]}")
+            else:
+                if not city or not country:
+                    raise ValueError("Cidade e país são obrigatórios quando as coordenadas não são informadas.")
+                coords = poster.get_coordinates(city, country, self.refresh_cache_var.get())
 
             distance = int(self.distance_var.get())
             width_mm = float(self.width_var.get())
@@ -207,8 +232,6 @@ class PosterApp:
                 self.log(f"Camadas OSMnx: {', '.join(selected_labels)}")
             else:
                 self.log("Camadas OSMnx: nenhuma")
-            coords = poster.get_coordinates(city, country, self.refresh_cache_var.get())
-
             for theme_name in themes_to_generate:
                 self.log(f"Gerando tema: {theme_name}")
                 poster.THEME = load_theme(theme_name)
