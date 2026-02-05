@@ -39,7 +39,7 @@ class PosterApp:
         main = ttk.Frame(self.canvas, padding=12)
         self._canvas_window = self.canvas.create_window((0, 0), window=main, anchor=tk.NW)
         main.columnconfigure(0, weight=1)
-        main.rowconfigure(5, weight=1)
+        main.rowconfigure(3, weight=1)
         main.bind("<Configure>", self._update_scrollregion)
         self.canvas.bind("<Configure>", self._update_canvas_width)
         self._bind_mousewheel(self.canvas)
@@ -59,9 +59,6 @@ class PosterApp:
         self.format_var = tk.StringVar(value="png")
         self.all_themes_var = tk.BooleanVar(value=False)
         self.refresh_cache_var = tk.BooleanVar(value=False)
-        self.osm_hierarchy_var = tk.BooleanVar(value=False)
-        self.typography_position_var = tk.BooleanVar(value=False)
-        self.osmnx_patterns_var = tk.BooleanVar(value=False)
         self.layer_vars: dict[str, tk.BooleanVar] = {}
         self.layer_options = [
             ("roads", "Ruas (hierarquia)", True),
@@ -115,21 +112,8 @@ class PosterApp:
         self.generate_button = ttk.Button(actions, text="Gerar pôster", command=self.start_generation)
         self.generate_button.pack(side=tk.RIGHT)
 
-        tips = ttk.LabelFrame(main, text="Dicas rápidas", padding=8)
-        tips.grid(row=2, column=0, sticky=tk.EW)
-        tips_text = (
-            "Distância sugerida: 4000–6000m (pequenas), 8000–12000m (médias), "
-            "15000–20000m (grandes).\n"
-            "Resolução 300 DPI: Instagram 91x91 mm, A4 210x297 mm, 4K 325x183 mm.\n"
-            "Hierarquia de vias: motorway > trunk/primary > secondary > tertiary > residential.\n"
-            "Tipografia (y em 0-1): cidade 0.14, linha 0.125, país 0.10, coords 0.07, crédito 0.02.\n"
-            "OSMnx: buildings tags={'building': True}, cafés tags={'amenity': 'cafe'}, redes drive/bike/walk."
-        )
-        self.tips_label = ttk.Label(tips, text=tips_text, justify=tk.LEFT, wraplength=720)
-        self.tips_label.pack(anchor=tk.W, fill=tk.X)
-
         layers_frame = ttk.LabelFrame(main, text="Camadas OSMnx", padding=8)
-        layers_frame.grid(row=3, column=0, sticky=tk.EW)
+        layers_frame.grid(row=2, column=0, sticky=tk.EW)
         layers_frame.columnconfigure(0, weight=1)
         layers_frame.columnconfigure(1, weight=1)
         for index, (key, label, default) in enumerate(self.layer_options):
@@ -139,32 +123,12 @@ class PosterApp:
             row = index // 2
             ttk.Checkbutton(layers_frame, text=label, variable=var).grid(row=row, column=column, sticky=tk.W)
 
-        reference_frame = ttk.LabelFrame(main, text="Referências opcionais", padding=8)
-        reference_frame.grid(row=4, column=0, sticky=tk.EW)
-        ttk.Checkbutton(
-            reference_frame,
-            text="OSM Highway Types → Road Hierarchy",
-            variable=self.osm_hierarchy_var,
-        ).pack(anchor=tk.W)
-        ttk.Checkbutton(
-            reference_frame,
-            text="Typography Positioning (ax.transAxes)",
-            variable=self.typography_position_var,
-        ).pack(anchor=tk.W)
-        ttk.Checkbutton(
-            reference_frame,
-            text="Useful OSMnx Patterns",
-            variable=self.osmnx_patterns_var,
-        ).pack(anchor=tk.W)
-
         log_frame = ttk.LabelFrame(main, text="Logs", padding=8)
-        log_frame.grid(row=5, column=0, sticky=tk.NSEW)
+        log_frame.grid(row=3, column=0, sticky=tk.NSEW)
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
         self.log_text = ScrolledText(log_frame, height=12, state=tk.DISABLED)
         self.log_text.grid(row=0, column=0, sticky=tk.NSEW)
-
-        self.root.bind("<Configure>", self._on_resize)
 
     def _bind_mousewheel(self, widget: tk.Widget) -> None:
         def on_enter(_: tk.Event) -> None:
@@ -192,40 +156,10 @@ class PosterApp:
     def _update_canvas_width(self, event: tk.Event) -> None:
         self.canvas.itemconfigure(self._canvas_window, width=event.width)
 
-    def _on_resize(self, event: tk.Event) -> None:
-        if event.widget is self.root:
-            padding = 64
-            wrap = max(200, event.width - padding)
-            self.tips_label.configure(wraplength=wrap)
-
     def _add_row(self, parent: ttk.Frame, row: int, label: str, variable: tk.StringVar) -> None:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky=tk.W, pady=6)
         entry = ttk.Entry(parent, textvariable=variable)
         entry.grid(row=row, column=1, sticky=tk.EW, pady=6)
-
-    def _log_reference_notes(self) -> None:
-        notes: list[str] = []
-        if self.osm_hierarchy_var.get():
-            notes.append(
-                "OSM Highway Types → Road Hierarchy: motorway/motorway_link (1.2), "
-                "trunk/primary (1.0), secondary (0.8), tertiary (0.6), "
-                "residential/living_street (0.4)."
-            )
-        if self.typography_position_var.get():
-            notes.append(
-                "Typography Positioning (ax.transAxes): y=0.14 cidade, y=0.125 linha, "
-                "y=0.10 país, y=0.07 coordenadas, y=0.02 crédito."
-            )
-        if self.osmnx_patterns_var.get():
-            notes.append(
-                "Useful OSMnx Patterns: features_from_point(building=True, amenity='cafe'); "
-                "graph_from_point(network_type='drive'|'bike'|'walk')."
-            )
-
-        if notes:
-            self.log("Referências selecionadas:")
-            for note in notes:
-                self.log(f"- {note}")
 
     def log(self, message: str) -> None:
         def append() -> None:
@@ -257,7 +191,6 @@ class PosterApp:
             if not city or not country:
                 raise ValueError("Cidade e país são obrigatórios.")
 
-            self._log_reference_notes()
             distance = int(self.distance_var.get())
             width_mm = float(self.width_var.get())
             height_mm = float(self.height_var.get())
