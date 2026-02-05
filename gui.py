@@ -27,7 +27,7 @@ class PosterApp:
         main = ttk.Frame(self.root, padding=12)
         main.grid(row=0, column=0, sticky=tk.NSEW)
         main.columnconfigure(0, weight=1)
-        main.rowconfigure(3, weight=1)
+        main.rowconfigure(4, weight=1)
 
         form = ttk.LabelFrame(main, text="Configurações", padding=12)
         form.grid(row=0, column=0, sticky=tk.EW)
@@ -44,6 +44,9 @@ class PosterApp:
         self.format_var = tk.StringVar(value="png")
         self.all_themes_var = tk.BooleanVar(value=False)
         self.refresh_cache_var = tk.BooleanVar(value=False)
+        self.osm_hierarchy_var = tk.BooleanVar(value=False)
+        self.typography_position_var = tk.BooleanVar(value=False)
+        self.osmnx_patterns_var = tk.BooleanVar(value=False)
 
         self._add_row(form, 0, "Cidade", self.city_var)
         self._add_row(form, 1, "País", self.country_var)
@@ -86,8 +89,26 @@ class PosterApp:
         self.tips_label = ttk.Label(tips, text=tips_text, justify=tk.LEFT, wraplength=720)
         self.tips_label.pack(anchor=tk.W, fill=tk.X)
 
+        reference_frame = ttk.LabelFrame(main, text="Referências opcionais", padding=8)
+        reference_frame.grid(row=3, column=0, sticky=tk.EW)
+        ttk.Checkbutton(
+            reference_frame,
+            text="OSM Highway Types → Road Hierarchy",
+            variable=self.osm_hierarchy_var,
+        ).pack(anchor=tk.W)
+        ttk.Checkbutton(
+            reference_frame,
+            text="Typography Positioning (ax.transAxes)",
+            variable=self.typography_position_var,
+        ).pack(anchor=tk.W)
+        ttk.Checkbutton(
+            reference_frame,
+            text="Useful OSMnx Patterns",
+            variable=self.osmnx_patterns_var,
+        ).pack(anchor=tk.W)
+
         log_frame = ttk.LabelFrame(main, text="Logs", padding=8)
-        log_frame.grid(row=3, column=0, sticky=tk.NSEW)
+        log_frame.grid(row=4, column=0, sticky=tk.NSEW)
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
         self.log_text = ScrolledText(log_frame, height=12, state=tk.DISABLED)
@@ -105,6 +126,30 @@ class PosterApp:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky=tk.W, pady=6)
         entry = ttk.Entry(parent, textvariable=variable)
         entry.grid(row=row, column=1, sticky=tk.EW, pady=6)
+
+    def _log_reference_notes(self) -> None:
+        notes: list[str] = []
+        if self.osm_hierarchy_var.get():
+            notes.append(
+                "OSM Highway Types → Road Hierarchy: motorway/motorway_link (1.2), "
+                "trunk/primary (1.0), secondary (0.8), tertiary (0.6), "
+                "residential/living_street (0.4)."
+            )
+        if self.typography_position_var.get():
+            notes.append(
+                "Typography Positioning (ax.transAxes): y=0.14 cidade, y=0.125 linha, "
+                "y=0.10 país, y=0.07 coordenadas, y=0.02 crédito."
+            )
+        if self.osmnx_patterns_var.get():
+            notes.append(
+                "Useful OSMnx Patterns: features_from_point(building=True, amenity='cafe'); "
+                "graph_from_point(network_type='drive'|'bike'|'walk')."
+            )
+
+        if notes:
+            self.log("Referências selecionadas:")
+            for note in notes:
+                self.log(f"- {note}")
 
     def log(self, message: str) -> None:
         def append() -> None:
@@ -136,6 +181,7 @@ class PosterApp:
             if not city or not country:
                 raise ValueError("Cidade e país são obrigatórios.")
 
+            self._log_reference_notes()
             distance = int(self.distance_var.get())
             width_mm = float(self.width_var.get())
             height_mm = float(self.height_var.get())
