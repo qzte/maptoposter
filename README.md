@@ -32,6 +32,14 @@ pip install -r requirements.txt
 python create_map_poster.py --city <city> --country <country> [options]
 ```
 
+### Interface gráfica (GUI)
+
+Para usar a interface gráfica, execute:
+
+```bash
+python gui.py
+```
+
 ### Options
 
 | Option | Short | Description | Default |
