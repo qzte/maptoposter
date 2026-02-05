@@ -81,7 +81,10 @@ class PosterApp:
         tips_text = (
             "Distância sugerida: 4000–6000m (pequenas), 8000–12000m (médias), "
             "15000–20000m (grandes).\n"
-            "Resolução 300 DPI: Instagram 91x91 mm, A4 210x297 mm, 4K 325x183 mm."
+            "Resolução 300 DPI: Instagram 91x91 mm, A4 210x297 mm, 4K 325x183 mm.\n"
+            "Hierarquia de vias: motorway > trunk/primary > secondary > tertiary > residential.\n"
+            "Tipografia (y em 0-1): cidade 0.14, linha 0.125, país 0.10, coords 0.07, crédito 0.02.\n"
+            "OSMnx: buildings tags={'building': True}, cafés tags={'amenity': 'cafe'}, redes drive/bike/walk."
         )
         self.tips_label = ttk.Label(tips, text=tips_text, justify=tk.LEFT, wraplength=720)
         self.tips_label.pack(anchor=tk.W, fill=tk.X)
