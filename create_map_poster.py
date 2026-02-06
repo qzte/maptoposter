@@ -24,7 +24,7 @@ THEME = dict[str, str]()  # Will be loaded later
 # - Road Hierarchy (low → high): path/track/footway/cycleway → service → residential/living_street/unclassified
 #   → tertiary → secondary → primary → trunk → motorway (and *_link variants).
 # Typography Positioning:
-# - Map typography is added after layers/gradients via add_text/add_attribution with a font scale based on
+# - Map typography is added after layers/gradients via add_text
 #   the smaller poster dimension to preserve balance across portrait/landscape outputs.
 # Useful OSMnx Patterns:
 # - Project graph/GeoDataFrames to a metric CRS before distance-based cropping or linewidth scaling.
