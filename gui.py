@@ -40,7 +40,7 @@ class PosterApp:
         main = ttk.Frame(self.canvas, padding=12)
         self._canvas_window = self.canvas.create_window((0, 0), window=main, anchor=tk.NW)
         main.columnconfigure(0, weight=1)
-        main.rowconfigure(3, weight=1)
+        main.rowconfigure(4, weight=1)
         main.bind("<Configure>", self._update_scrollregion)
         self.canvas.bind("<Configure>", self._update_canvas_width)
         self._bind_mousewheel(self.canvas)
@@ -61,6 +61,27 @@ class PosterApp:
         self.format_var = tk.StringVar(value="png")
         self.all_themes_var = tk.BooleanVar(value=False)
         self.refresh_cache_var = tk.BooleanVar(value=False)
+        self.show_city_var = tk.BooleanVar(value=True)
+        self.show_country_var = tk.BooleanVar(value=True)
+        self.show_coords_var = tk.BooleanVar(value=True)
+        self.show_attribution_var = tk.BooleanVar(value=True)
+        self.show_line_var = tk.BooleanVar(value=True)
+        self.font_family_var = tk.StringVar()
+        self.font_main_size_var = tk.StringVar(value="60")
+        self.font_sub_size_var = tk.StringVar(value="22")
+        self.font_coords_size_var = tk.StringVar(value="14")
+        self.font_attr_size_var = tk.StringVar(value="8")
+        self.city_x_var = tk.StringVar(value="0.5")
+        self.city_y_var = tk.StringVar(value="0.14")
+        self.country_x_var = tk.StringVar(value="0.5")
+        self.country_y_var = tk.StringVar(value="0.10")
+        self.coords_x_var = tk.StringVar(value="0.5")
+        self.coords_y_var = tk.StringVar(value="0.07")
+        self.line_x_start_var = tk.StringVar(value="0.4")
+        self.line_x_end_var = tk.StringVar(value="0.6")
+        self.line_y_var = tk.StringVar(value="0.125")
+        self.attr_x_var = tk.StringVar(value="0.98")
+        self.attr_y_var = tk.StringVar(value="0.02")
         self.layer_vars: dict[str, tk.BooleanVar] = {}
         self.layer_options = [
             ("roads", "Ruas (hierarquia)", True),
@@ -112,13 +133,59 @@ class PosterApp:
 
         form.columnconfigure(1, weight=1)
 
+        text_frame = ttk.LabelFrame(main, text="Texto no mapa", padding=8)
+        text_frame.grid(row=1, column=0, sticky=tk.EW)
+        text_frame.columnconfigure(1, weight=1)
+
+        show_row = ttk.Frame(text_frame)
+        show_row.grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=4)
+        ttk.Checkbutton(show_row, text="Cidade", variable=self.show_city_var).pack(side=tk.LEFT, padx=(0, 12))
+        ttk.Checkbutton(show_row, text="País", variable=self.show_country_var).pack(side=tk.LEFT, padx=(0, 12))
+        ttk.Checkbutton(show_row, text="Coordenadas", variable=self.show_coords_var).pack(side=tk.LEFT, padx=(0, 12))
+        ttk.Checkbutton(show_row, text="Crédito OSM", variable=self.show_attribution_var).pack(side=tk.LEFT, padx=(0, 12))
+        ttk.Checkbutton(show_row, text="Linha separadora", variable=self.show_line_var).pack(side=tk.LEFT, padx=(0, 12))
+
+        self._add_row(text_frame, 1, "Fonte (Google Fonts ou vazio p/ padrão)", self.font_family_var)
+        size_frame = ttk.Frame(text_frame)
+        size_frame.grid(row=2, column=0, columnspan=2, sticky=tk.EW, pady=4)
+        size_frame.columnconfigure(1, weight=1)
+        ttk.Label(size_frame, text="Tamanhos (pt)").grid(row=0, column=0, sticky=tk.W)
+        ttk.Entry(size_frame, textvariable=self.font_main_size_var, width=6).grid(row=0, column=1, sticky=tk.W, padx=(8, 8))
+        ttk.Label(size_frame, text="Principal").grid(row=0, column=2, sticky=tk.W, padx=(0, 12))
+        ttk.Entry(size_frame, textvariable=self.font_sub_size_var, width=6).grid(row=0, column=3, sticky=tk.W, padx=(0, 8))
+        ttk.Label(size_frame, text="País").grid(row=0, column=4, sticky=tk.W, padx=(0, 12))
+        ttk.Entry(size_frame, textvariable=self.font_coords_size_var, width=6).grid(row=0, column=5, sticky=tk.W, padx=(0, 8))
+        ttk.Label(size_frame, text="Coords").grid(row=0, column=6, sticky=tk.W, padx=(0, 12))
+        ttk.Entry(size_frame, textvariable=self.font_attr_size_var, width=6).grid(row=0, column=7, sticky=tk.W, padx=(0, 8))
+        ttk.Label(size_frame, text="Crédito").grid(row=0, column=8, sticky=tk.W)
+
+        pos_frame = ttk.Frame(text_frame)
+        pos_frame.grid(row=3, column=0, columnspan=2, sticky=tk.EW, pady=4)
+        ttk.Label(pos_frame, text="Posições (X/Y 0-1)").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(pos_frame, text="Cidade").grid(row=1, column=0, sticky=tk.W)
+        ttk.Entry(pos_frame, textvariable=self.city_x_var, width=6).grid(row=1, column=1, padx=(8, 4))
+        ttk.Entry(pos_frame, textvariable=self.city_y_var, width=6).grid(row=1, column=2, padx=(0, 12))
+        ttk.Label(pos_frame, text="País").grid(row=1, column=3, sticky=tk.W)
+        ttk.Entry(pos_frame, textvariable=self.country_x_var, width=6).grid(row=1, column=4, padx=(8, 4))
+        ttk.Entry(pos_frame, textvariable=self.country_y_var, width=6).grid(row=1, column=5, padx=(0, 12))
+        ttk.Label(pos_frame, text="Coords").grid(row=1, column=6, sticky=tk.W)
+        ttk.Entry(pos_frame, textvariable=self.coords_x_var, width=6).grid(row=1, column=7, padx=(8, 4))
+        ttk.Entry(pos_frame, textvariable=self.coords_y_var, width=6).grid(row=1, column=8, padx=(0, 12))
+        ttk.Label(pos_frame, text="Linha").grid(row=2, column=0, sticky=tk.W)
+        ttk.Entry(pos_frame, textvariable=self.line_x_start_var, width=6).grid(row=2, column=1, padx=(8, 4))
+        ttk.Entry(pos_frame, textvariable=self.line_x_end_var, width=6).grid(row=2, column=2, padx=(0, 12))
+        ttk.Entry(pos_frame, textvariable=self.line_y_var, width=6).grid(row=2, column=3, padx=(0, 12))
+        ttk.Label(pos_frame, text="Crédito").grid(row=2, column=4, sticky=tk.W)
+        ttk.Entry(pos_frame, textvariable=self.attr_x_var, width=6).grid(row=2, column=5, padx=(8, 4))
+        ttk.Entry(pos_frame, textvariable=self.attr_y_var, width=6).grid(row=2, column=6, padx=(0, 12))
+
         actions = ttk.Frame(main, padding=(0, 12, 0, 12))
-        actions.grid(row=1, column=0, sticky=tk.EW)
+        actions.grid(row=2, column=0, sticky=tk.EW)
         self.generate_button = ttk.Button(actions, text="Gerar pôster", command=self.start_generation)
         self.generate_button.pack(side=tk.RIGHT)
 
         layers_frame = ttk.LabelFrame(main, text="Camadas OSMnx", padding=8)
-        layers_frame.grid(row=2, column=0, sticky=tk.EW)
+        layers_frame.grid(row=3, column=0, sticky=tk.EW)
         layers_frame.columnconfigure(0, weight=1)
         layers_frame.columnconfigure(1, weight=1)
         for index, (key, label, default) in enumerate(self.layer_options):
@@ -129,7 +196,7 @@ class PosterApp:
             ttk.Checkbutton(layers_frame, text=label, variable=var).grid(row=row, column=column, sticky=tk.W)
 
         log_frame = ttk.LabelFrame(main, text="Logs", padding=8)
-        log_frame.grid(row=3, column=0, sticky=tk.NSEW)
+        log_frame.grid(row=4, column=0, sticky=tk.NSEW)
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
         self.log_text = ScrolledText(log_frame, height=12, state=tk.DISABLED)
@@ -209,6 +276,24 @@ class PosterApp:
             "format": self.format_var.get().strip(),
             "all_themes": self.all_themes_var.get(),
             "refresh_cache": self.refresh_cache_var.get(),
+            "text_options": {
+                "show_city": self.show_city_var.get(),
+                "show_country": self.show_country_var.get(),
+                "show_coords": self.show_coords_var.get(),
+                "show_attribution": self.show_attribution_var.get(),
+                "show_line": self.show_line_var.get(),
+                "font_family": self.font_family_var.get().strip(),
+                "main_size": self.font_main_size_var.get().strip(),
+                "sub_size": self.font_sub_size_var.get().strip(),
+                "coords_size": self.font_coords_size_var.get().strip(),
+                "attr_size": self.font_attr_size_var.get().strip(),
+                "city_pos": {"x": self.city_x_var.get().strip(), "y": self.city_y_var.get().strip()},
+                "country_pos": {"x": self.country_x_var.get().strip(), "y": self.country_y_var.get().strip()},
+                "coords_pos": {"x": self.coords_x_var.get().strip(), "y": self.coords_y_var.get().strip()},
+                "line_x": {"start": self.line_x_start_var.get().strip(), "end": self.line_x_end_var.get().strip()},
+                "line_y": self.line_y_var.get().strip(),
+                "attr_pos": {"x": self.attr_x_var.get().strip(), "y": self.attr_y_var.get().strip()},
+            },
             "enabled_layers": enabled_layers,
             "version": 1,
         }
@@ -271,6 +356,41 @@ class PosterApp:
         self.all_themes_var.set(bool(config.get("all_themes", False)))
         self.refresh_cache_var.set(bool(config.get("refresh_cache", False)))
 
+        text_options = config.get("text_options", {})
+        if isinstance(text_options, dict):
+            self.show_city_var.set(bool(text_options.get("show_city", True)))
+            self.show_country_var.set(bool(text_options.get("show_country", True)))
+            self.show_coords_var.set(bool(text_options.get("show_coords", True)))
+            self.show_attribution_var.set(bool(text_options.get("show_attribution", True)))
+            self.show_line_var.set(bool(text_options.get("show_line", True)))
+            self.font_family_var.set(str(text_options.get("font_family", "")))
+            self.font_main_size_var.set(str(text_options.get("main_size", self.font_main_size_var.get())))
+            self.font_sub_size_var.set(str(text_options.get("sub_size", self.font_sub_size_var.get())))
+            self.font_coords_size_var.set(str(text_options.get("coords_size", self.font_coords_size_var.get())))
+            self.font_attr_size_var.set(str(text_options.get("attr_size", self.font_attr_size_var.get())))
+
+            city_pos = text_options.get("city_pos", {})
+            if isinstance(city_pos, dict):
+                self.city_x_var.set(str(city_pos.get("x", self.city_x_var.get())))
+                self.city_y_var.set(str(city_pos.get("y", self.city_y_var.get())))
+            country_pos = text_options.get("country_pos", {})
+            if isinstance(country_pos, dict):
+                self.country_x_var.set(str(country_pos.get("x", self.country_x_var.get())))
+                self.country_y_var.set(str(country_pos.get("y", self.country_y_var.get())))
+            coords_pos = text_options.get("coords_pos", {})
+            if isinstance(coords_pos, dict):
+                self.coords_x_var.set(str(coords_pos.get("x", self.coords_x_var.get())))
+                self.coords_y_var.set(str(coords_pos.get("y", self.coords_y_var.get())))
+            line_x = text_options.get("line_x", {})
+            if isinstance(line_x, dict):
+                self.line_x_start_var.set(str(line_x.get("start", self.line_x_start_var.get())))
+                self.line_x_end_var.set(str(line_x.get("end", self.line_x_end_var.get())))
+            self.line_y_var.set(str(text_options.get("line_y", self.line_y_var.get())))
+            attr_pos = text_options.get("attr_pos", {})
+            if isinstance(attr_pos, dict):
+                self.attr_x_var.set(str(attr_pos.get("x", self.attr_x_var.get())))
+                self.attr_y_var.set(str(attr_pos.get("y", self.attr_y_var.get())))
+
         enabled_layers = config.get("enabled_layers")
         if isinstance(enabled_layers, list):
             enabled_set = {layer for layer in enabled_layers if isinstance(layer, str)}
@@ -325,6 +445,24 @@ class PosterApp:
                 self.log(f"Gerando tema: {theme_name}")
                 poster.THEME = load_theme(theme_name)
                 output_file = poster.generate_output_filename(city, theme_name, output_format)
+                text_options = {
+                    "show_city": self.show_city_var.get(),
+                    "show_country": self.show_country_var.get(),
+                    "show_coords": self.show_coords_var.get(),
+                    "show_attribution": self.show_attribution_var.get(),
+                    "show_line": self.show_line_var.get(),
+                    "font_family": self.font_family_var.get().strip() or None,
+                    "main_size": float(self.font_main_size_var.get()),
+                    "sub_size": float(self.font_sub_size_var.get()),
+                    "coords_size": float(self.font_coords_size_var.get()),
+                    "attr_size": float(self.font_attr_size_var.get()),
+                    "city_pos": (float(self.city_x_var.get()), float(self.city_y_var.get())),
+                    "country_pos": (float(self.country_x_var.get()), float(self.country_y_var.get())),
+                    "coords_pos": (float(self.coords_x_var.get()), float(self.coords_y_var.get())),
+                    "line_x": (float(self.line_x_start_var.get()), float(self.line_x_end_var.get())),
+                    "line_y": float(self.line_y_var.get()),
+                    "attr_pos": (float(self.attr_x_var.get()), float(self.attr_y_var.get())),
+                }
                 poster.create_poster(
                     city,
                     country,
@@ -339,6 +477,7 @@ class PosterApp:
                     name_label=self.name_label_var.get().strip() or None,
                     refresh_cache=self.refresh_cache_var.get(),
                     enabled_layers=selected_layers,
+                    text_options=text_options,
                 )
 
             self.log("Geração concluída com sucesso!")
