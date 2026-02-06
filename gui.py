@@ -520,13 +520,15 @@ class PosterApp:
                     "name_label": self.name_label_var.get().strip() or None,
                     "refresh_cache": self.refresh_cache_var.get(),
                     "enabled_layers": selected_layers,
-                    "text_options": text_options,
                 }
                 create_sig = inspect.signature(poster.create_poster)
-                if "road_types" in create_sig.parameters or any(
+                has_kwargs = any(
                     param.kind == inspect.Parameter.VAR_KEYWORD for param in create_sig.parameters.values()
-                ):
+                )
+                if "road_types" in create_sig.parameters or has_kwargs:
                     poster_kwargs["road_types"] = selected_road_types
+                if "text_options" in create_sig.parameters or has_kwargs:
+                    poster_kwargs["text_options"] = text_options
                 poster.create_poster(
                     city,
                     country,
