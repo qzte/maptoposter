@@ -271,7 +271,7 @@ def create_poster(
       # (layer_key, layer_data,   allowed_geom_types,                  facecolor / color,                                          linewidth,   zorder)
         ("oceans",      oceans,      ['Polygon','MultiPolygon'],          THEME['water'],                                             None,        0),
         ("water",       water,       ['Polygon','MultiPolygon'],          THEME['water'],                                             None,        2),
-        ("rivers",      rivers,      ['LineString','MultiLineString'],    THEME['water'],                                             2.0,         3),
+        ("rivers",      rivers,      ['Polygon','MultiPolygon'],          THEME['water'],                                             None,        3),
         ("forests",     forests,     ['Polygon','MultiPolygon'],          THEME.get('forest', THEME.get('parks')),                    None,        1),
         ("green_spaces",grass,       ['Polygon','MultiPolygon'],          THEME.get('grass', THEME.get('parks')),                     None,        1),
         ("farmland",    farmland,    ['Polygon','MultiPolygon'],          THEME.get('farmland', THEME.get('parks')),                  None,        1),
