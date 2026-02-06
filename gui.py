@@ -1,3 +1,4 @@
+import inspect
 import json
 import threading
 import tkinter as tk
@@ -511,6 +512,21 @@ class PosterApp:
                     "line_y": float(self.line_y_var.get()),
                     "attr_pos": (float(self.attr_x_var.get()), float(self.attr_y_var.get())),
                 }
+                poster_kwargs = {
+                    "width": width,
+                    "height": height,
+                    "dpi": dpi,
+                    "country_label": self.country_label_var.get().strip() or None,
+                    "name_label": self.name_label_var.get().strip() or None,
+                    "refresh_cache": self.refresh_cache_var.get(),
+                    "enabled_layers": selected_layers,
+                    "text_options": text_options,
+                }
+                create_sig = inspect.signature(poster.create_poster)
+                if "road_types" in create_sig.parameters or any(
+                    param.kind == inspect.Parameter.VAR_KEYWORD for param in create_sig.parameters.values()
+                ):
+                    poster_kwargs["road_types"] = selected_road_types
                 poster.create_poster(
                     city,
                     country,
@@ -518,15 +534,7 @@ class PosterApp:
                     distance,
                     output_file,
                     output_format,
-                    width=width,
-                    height=height,
-                    dpi=dpi,
-                    country_label=self.country_label_var.get().strip() or None,
-                    name_label=self.name_label_var.get().strip() or None,
-                    refresh_cache=self.refresh_cache_var.get(),
-                    enabled_layers=selected_layers,
-                    road_types=selected_road_types,
-                    text_options=text_options,
+                    **poster_kwargs,
                 )
 
             self.log("Geração concluída com sucesso!")
