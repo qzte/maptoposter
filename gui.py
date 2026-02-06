@@ -17,6 +17,7 @@ class PosterApp:
         self.root.minsize(780, 720)
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
+        self._configure_style()
 
         self.theme_names = get_available_themes()
         if not self.theme_names:
@@ -26,19 +27,115 @@ class PosterApp:
 
         self._build_ui()
 
+    def _configure_style(self) -> None:
+        self.style = ttk.Style(self.root)
+        try:
+            self.style.theme_use("clam")
+        except tk.TclError:
+            pass
+
+        self.colors = {
+            "bg": "#eaf2fb",
+            "card": "#f7fbff",
+            "border": "#c7dbf2",
+            "text": "#0f2c4c",
+            "muted": "#3f5f7f",
+            "accent": "#1e88e5",
+            "accent_dark": "#1565c0",
+            "accent_light": "#bbdefb",
+        }
+
+        self.root.configure(bg=self.colors["bg"])
+        self.style.configure(
+            ".",
+            background=self.colors["bg"],
+            foreground=self.colors["text"],
+            font=("Segoe UI", 10),
+        )
+        self.style.configure("TFrame", background=self.colors["bg"])
+        self.style.configure("Card.TFrame", background=self.colors["card"])
+        self.style.configure("TLabel", background=self.colors["bg"], foreground=self.colors["text"])
+        self.style.configure(
+            "TLabelframe",
+            background=self.colors["card"],
+            foreground=self.colors["text"],
+            bordercolor=self.colors["border"],
+            relief="solid",
+        )
+        self.style.configure("TLabelframe.Label", background=self.colors["card"], foreground=self.colors["muted"])
+        self.style.configure(
+            "TEntry",
+            fieldbackground="white",
+            foreground=self.colors["text"],
+            bordercolor=self.colors["border"],
+            lightcolor=self.colors["border"],
+            darkcolor=self.colors["border"],
+            padding=6,
+        )
+        self.style.configure(
+            "TCombobox",
+            fieldbackground="white",
+            foreground=self.colors["text"],
+            bordercolor=self.colors["border"],
+            padding=6,
+        )
+        self.style.configure(
+            "TButton",
+            background=self.colors["accent"],
+            foreground="white",
+            padding=(14, 8),
+            borderwidth=0,
+        )
+        self.style.map(
+            "TButton",
+            background=[
+                ("active", self.colors["accent_dark"]),
+                ("pressed", self.colors["accent_dark"]),
+            ],
+            foreground=[("disabled", "#d7e5f5")],
+        )
+        self.style.configure(
+            "Secondary.TButton",
+            background=self.colors["accent_light"],
+            foreground=self.colors["accent_dark"],
+            padding=(12, 6),
+        )
+        self.style.map(
+            "Secondary.TButton",
+            background=[("active", "#a9cff7"), ("pressed", "#90c2f3")],
+            foreground=[("disabled", "#8fb7e5")],
+        )
+        self.style.configure("TCheckbutton", background=self.colors["card"], foreground=self.colors["text"])
+        self.style.configure(
+            "TNotebook",
+            background=self.colors["bg"],
+            bordercolor=self.colors["border"],
+        )
+        self.style.configure(
+            "TNotebook.Tab",
+            background=self.colors["card"],
+            foreground=self.colors["muted"],
+            padding=(12, 6),
+        )
+        self.style.map(
+            "TNotebook.Tab",
+            background=[("selected", self.colors["accent_light"])],
+            foreground=[("selected", self.colors["accent_dark"])],
+        )
+
     def _build_ui(self) -> None:
         outer = ttk.Frame(self.root)
         outer.grid(row=0, column=0, sticky=tk.NSEW)
         outer.columnconfigure(0, weight=1)
         outer.rowconfigure(0, weight=1)
 
-        self.canvas = tk.Canvas(outer, highlightthickness=0)
+        self.canvas = tk.Canvas(outer, highlightthickness=0, bg=self.colors["bg"])
         scrollbar = ttk.Scrollbar(outer, orient=tk.VERTICAL, command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=scrollbar.set)
         self.canvas.grid(row=0, column=0, sticky=tk.NSEW)
         scrollbar.grid(row=0, column=1, sticky=tk.NS)
 
-        main = ttk.Frame(self.canvas, padding=12)
+        main = ttk.Frame(self.canvas, padding=16, style="Card.TFrame")
         self._canvas_window = self.canvas.create_window((0, 0), window=main, anchor=tk.NW)
         main.columnconfigure(0, weight=1)
         main.rowconfigure(4, weight=1)
@@ -46,7 +143,7 @@ class PosterApp:
         self.canvas.bind("<Configure>", self._update_canvas_width)
         self._bind_mousewheel(self.canvas)
 
-        form = ttk.LabelFrame(main, text="Configurações", padding=12)
+        form = ttk.LabelFrame(main, text="Configurações", padding=14)
         form.grid(row=0, column=0, sticky=tk.EW)
 
         self.city_var = tk.StringVar()
@@ -135,21 +232,27 @@ class PosterApp:
         self._add_row(form, 9, "Altura (mm)", self.height_var)
         self._add_row(form, 10, "DPI (png)", self.dpi_var)
 
-        options = ttk.Frame(form)
+        options = ttk.Frame(form, style="Card.TFrame")
         options.grid(row=11, column=0, columnspan=2, sticky=tk.W, pady=8)
         ttk.Checkbutton(options, text="Gerar todos os temas", variable=self.all_themes_var).pack(side=tk.LEFT, padx=(0, 16))
         ttk.Checkbutton(options, text="Atualizar cache", variable=self.refresh_cache_var).pack(side=tk.LEFT, padx=(0, 16))
-        ttk.Button(options, text="Listar temas", command=self.show_themes).pack(side=tk.LEFT, padx=(0, 16))
-        ttk.Button(options, text="Salvar configuração", command=self.save_config).pack(side=tk.LEFT, padx=(0, 16))
-        ttk.Button(options, text="Carregar configuração", command=self.load_config).pack(side=tk.LEFT)
+        ttk.Button(options, text="Listar temas", command=self.show_themes, style="Secondary.TButton").pack(
+            side=tk.LEFT, padx=(0, 16)
+        )
+        ttk.Button(options, text="Salvar configuração", command=self.save_config, style="Secondary.TButton").pack(
+            side=tk.LEFT, padx=(0, 16)
+        )
+        ttk.Button(options, text="Carregar configuração", command=self.load_config, style="Secondary.TButton").pack(
+            side=tk.LEFT
+        )
 
         form.columnconfigure(1, weight=1)
 
-        text_frame = ttk.LabelFrame(main, text="Texto no mapa", padding=8)
+        text_frame = ttk.LabelFrame(main, text="Texto no mapa", padding=12)
         text_frame.grid(row=1, column=0, sticky=tk.EW)
         text_frame.columnconfigure(1, weight=1)
 
-        show_row = ttk.Frame(text_frame)
+        show_row = ttk.Frame(text_frame, style="Card.TFrame")
         show_row.grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=4)
         ttk.Checkbutton(show_row, text="Cidade", variable=self.show_city_var).pack(side=tk.LEFT, padx=(0, 12))
         ttk.Checkbutton(show_row, text="País", variable=self.show_country_var).pack(side=tk.LEFT, padx=(0, 12))
@@ -158,7 +261,7 @@ class PosterApp:
         ttk.Checkbutton(show_row, text="Linha separadora", variable=self.show_line_var).pack(side=tk.LEFT, padx=(0, 12))
 
         self._add_row(text_frame, 1, "Fonte (Google Fonts ou vazio p/ padrão)", self.font_family_var)
-        size_frame = ttk.Frame(text_frame)
+        size_frame = ttk.Frame(text_frame, style="Card.TFrame")
         size_frame.grid(row=2, column=0, columnspan=2, sticky=tk.EW, pady=4)
         size_frame.columnconfigure(1, weight=1)
         ttk.Label(size_frame, text="Tamanhos (pt)").grid(row=0, column=0, sticky=tk.W)
@@ -171,7 +274,7 @@ class PosterApp:
         ttk.Entry(size_frame, textvariable=self.font_attr_size_var, width=6).grid(row=0, column=7, sticky=tk.W, padx=(0, 8))
         ttk.Label(size_frame, text="Crédito").grid(row=0, column=8, sticky=tk.W)
 
-        pos_frame = ttk.Frame(text_frame)
+        pos_frame = ttk.Frame(text_frame, style="Card.TFrame")
         pos_frame.grid(row=3, column=0, columnspan=2, sticky=tk.EW, pady=4)
         ttk.Label(pos_frame, text="Posições (X/Y 0-1)").grid(row=0, column=0, sticky=tk.W)
         ttk.Label(pos_frame, text="Cidade").grid(row=1, column=0, sticky=tk.W)
@@ -191,7 +294,7 @@ class PosterApp:
         ttk.Entry(pos_frame, textvariable=self.attr_x_var, width=6).grid(row=2, column=5, padx=(8, 4))
         ttk.Entry(pos_frame, textvariable=self.attr_y_var, width=6).grid(row=2, column=6, padx=(0, 12))
 
-        actions = ttk.Frame(main, padding=(0, 12, 0, 12))
+        actions = ttk.Frame(main, padding=(0, 16, 0, 16), style="Card.TFrame")
         actions.grid(row=2, column=0, sticky=tk.EW)
         self.generate_button = ttk.Button(actions, text="Gerar pôster", command=self.start_generation)
         self.generate_button.pack(side=tk.RIGHT)
@@ -199,7 +302,7 @@ class PosterApp:
         options_tabs = ttk.Notebook(main)
         options_tabs.grid(row=3, column=0, sticky=tk.EW)
 
-        layers_frame = ttk.Frame(options_tabs, padding=8)
+        layers_frame = ttk.Frame(options_tabs, padding=10, style="Card.TFrame")
         options_tabs.add(layers_frame, text="Camadas OSMnx")
         layers_frame.columnconfigure(0, weight=1)
         layers_frame.columnconfigure(1, weight=1)
@@ -210,7 +313,7 @@ class PosterApp:
             row = index // 2
             ttk.Checkbutton(layers_frame, text=label, variable=var).grid(row=row, column=column, sticky=tk.W)
 
-        roads_frame = ttk.Frame(options_tabs, padding=8)
+        roads_frame = ttk.Frame(options_tabs, padding=10, style="Card.TFrame")
         options_tabs.add(roads_frame, text="Ruas")
         roads_frame.columnconfigure(0, weight=1)
         roads_frame.columnconfigure(1, weight=1)
@@ -221,11 +324,19 @@ class PosterApp:
             row = index // 2
             ttk.Checkbutton(roads_frame, text=label, variable=var).grid(row=row, column=column, sticky=tk.W)
 
-        log_frame = ttk.LabelFrame(main, text="Logs", padding=8)
+        log_frame = ttk.LabelFrame(main, text="Logs", padding=12)
         log_frame.grid(row=4, column=0, sticky=tk.NSEW)
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
-        self.log_text = ScrolledText(log_frame, height=12, state=tk.DISABLED)
+        self.log_text = ScrolledText(
+            log_frame,
+            height=12,
+            state=tk.DISABLED,
+            background="white",
+            foreground=self.colors["text"],
+            borderwidth=1,
+            relief="solid",
+        )
         self.log_text.grid(row=0, column=0, sticky=tk.NSEW)
 
     def _bind_mousewheel(self, widget: tk.Widget) -> None:
