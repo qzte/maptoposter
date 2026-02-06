@@ -203,13 +203,45 @@ def is_latin_script(text):
     return (latin_count / total_alpha) > 0.8
 
 
-def add_text(scale_factor, display_city, display_country, point, ax, THEME, zorder=11, fonts=None):
-    # Base font sizes (at 12 inches width)
-    base_main = 60
-    base_sub = 22
-    base_coords = 14
+def _safe_float(value, fallback):
+    if value is None:
+        return fallback
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return fallback
 
-    FONTS = load_fonts()
+
+def _parse_pos(value, default):
+    if isinstance(value, (list, tuple)) and len(value) == 2:
+        return (_safe_float(value[0], default[0]), _safe_float(value[1], default[1]))
+    if isinstance(value, dict):
+        return (
+            _safe_float(value.get("x"), default[0]),
+            _safe_float(value.get("y"), default[1]),
+        )
+    return default
+
+
+def add_text(
+    scale_factor,
+    display_city,
+    display_country,
+    point,
+    ax,
+    THEME,
+    zorder=11,
+    fonts=None,
+    text_options=None,
+):
+    text_options = text_options or {}
+    # Base font sizes (at 12 inches width)
+    base_main = _safe_float(text_options.get("main_size"), 60)
+    base_sub = _safe_float(text_options.get("sub_size"), 22)
+    base_coords = _safe_float(text_options.get("coords_size"), 14)
+
+    font_family = text_options.get("font_family")
+    FONTS = load_fonts(font_family)
 
     active_fonts = fonts or FONTS
     if active_fonts:
@@ -245,7 +277,7 @@ def add_text(scale_factor, display_city, display_country, point, ax, THEME, zord
         adjusted_font_size = base_adjusted_main
     
     if active_fonts:
-        font_main_adjusted = FontProperties(fname=FONTS['bold'], size=adjusted_font_size)
+        font_main_adjusted = FontProperties(fname=active_fonts["bold"], size=adjusted_font_size)
     else:
         font_main_adjusted = FontProperties(family='monospace', weight='bold', size=adjusted_font_size)
 
@@ -255,16 +287,36 @@ def add_text(scale_factor, display_city, display_country, point, ax, THEME, zord
     if lon < 0:
         coords = coords.replace("E", "W")
 
+    show_city = text_options.get("show_city", True)
+    show_country = text_options.get("show_country", True)
+    show_coords = text_options.get("show_coords", True)
+    show_line = text_options.get("show_line", True)
+
+    city_x, city_y = _parse_pos(text_options.get("city_pos"), (0.5, 0.14))
+    country_x, country_y = _parse_pos(text_options.get("country_pos"), (0.5, 0.10))
+    coords_x, coords_y = _parse_pos(text_options.get("coords_pos"), (0.5, 0.07))
+    line_x_start, line_x_end = _parse_pos(text_options.get("line_x"), (0.4, 0.6))
+    line_y = _safe_float(text_options.get("line_y"), 0.125)
+
     # --- ADD CITY,COUNTRY and COORDINATES ---
-    ax.text(0.5, 0.14, spaced_city, transform=ax.transAxes, color=THEME, ha='center', fontproperties=font_main_adjusted, zorder=zorder)
-    ax.text(0.5, 0.10, display_country.upper(), transform=ax.transAxes, color=THEME, ha="center", fontproperties=font_sub, zorder=zorder)
-    ax.text(0.5, 0.07, coords, transform=ax.transAxes, color=THEME, alpha=0.7, ha='center', fontproperties=font_coords, zorder=zorder)
+    if show_city:
+        ax.text(city_x, city_y, spaced_city, transform=ax.transAxes, color=THEME, ha='center', fontproperties=font_main_adjusted, zorder=zorder)
+    if show_country:
+        ax.text(country_x, country_y, display_country.upper(), transform=ax.transAxes, color=THEME, ha="center", fontproperties=font_sub, zorder=zorder)
+    if show_coords:
+        ax.text(coords_x, coords_y, coords, transform=ax.transAxes, color=THEME, alpha=0.7, ha='center', fontproperties=font_coords, zorder=zorder)
     # --- LINE SEPARATOR ---
-    ax.plot([0.4, 0.6], [0.125, 0.125], transform=ax.transAxes, color=THEME, linewidth=1 * scale_factor, zorder=zorder)
+    if show_line and (show_city or show_country or show_coords):
+        ax.plot([line_x_start, line_x_end], [line_y, line_y], transform=ax.transAxes, color=THEME, linewidth=1 * scale_factor, zorder=zorder)
     
-def add_attribution(ax, THEME, zorder=11):
+def add_attribution(ax, THEME, zorder=11, text_options=None):
     # --- ATTRIBUTION (bottom right) ---
-    FONTS = load_fonts()
-    base_attr = 8
+    text_options = text_options or {}
+    if not text_options.get("show_attribution", True):
+        return
+    font_family = text_options.get("font_family")
+    FONTS = load_fonts(font_family)
+    base_attr = _safe_float(text_options.get("attr_size"), 8)
     font_attr = FontProperties(size=base_attr, **({"fname": FONTS["light"]} if FONTS else {"family": "monospace"}))
-    ax.text(0.98, 0.02, "© OpenStreetMap contributors", transform=ax.transAxes, color=THEME, alpha=0.5, ha="right", va="bottom", fontproperties=font_attr, zorder=zorder)
+    attr_x, attr_y = _parse_pos(text_options.get("attr_pos"), (0.98, 0.02))
+    ax.text(attr_x, attr_y, "© OpenStreetMap contributors", transform=ax.transAxes, color=THEME, alpha=0.5, ha="right", va="bottom", fontproperties=font_attr, zorder=zorder)
