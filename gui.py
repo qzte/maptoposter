@@ -103,6 +103,14 @@ class PosterApp:
             ("railways", "Ferrovias", True),
             ("subtram", "Metrô/Tram", True),
         ]
+        self.road_type_vars: dict[str, tk.BooleanVar] = {}
+        self.road_type_options = [
+            ("tertiary", "Tertiary (+link)", True),
+            ("secondary", "Secondary (+link)", True),
+            ("primary", "Primary (+link)", True),
+            ("trunk", "Trunk (+link)", True),
+            ("motorway", "Motorway (+link)", True),
+        ]
 
         self._add_row(form, 0, "Cidade", self.city_var)
         self._add_row(form, 1, "País", self.country_var)
@@ -184,8 +192,11 @@ class PosterApp:
         self.generate_button = ttk.Button(actions, text="Gerar pôster", command=self.start_generation)
         self.generate_button.pack(side=tk.RIGHT)
 
-        layers_frame = ttk.LabelFrame(main, text="Camadas OSMnx", padding=8)
-        layers_frame.grid(row=3, column=0, sticky=tk.EW)
+        options_tabs = ttk.Notebook(main)
+        options_tabs.grid(row=3, column=0, sticky=tk.EW)
+
+        layers_frame = ttk.Frame(options_tabs, padding=8)
+        options_tabs.add(layers_frame, text="Camadas OSMnx")
         layers_frame.columnconfigure(0, weight=1)
         layers_frame.columnconfigure(1, weight=1)
         for index, (key, label, default) in enumerate(self.layer_options):
@@ -194,6 +205,17 @@ class PosterApp:
             column = index % 2
             row = index // 2
             ttk.Checkbutton(layers_frame, text=label, variable=var).grid(row=row, column=column, sticky=tk.W)
+
+        roads_frame = ttk.Frame(options_tabs, padding=8)
+        options_tabs.add(roads_frame, text="Ruas")
+        roads_frame.columnconfigure(0, weight=1)
+        roads_frame.columnconfigure(1, weight=1)
+        for index, (key, label, default) in enumerate(self.road_type_options):
+            var = tk.BooleanVar(value=default)
+            self.road_type_vars[key] = var
+            column = index % 2
+            row = index // 2
+            ttk.Checkbutton(roads_frame, text=label, variable=var).grid(row=row, column=column, sticky=tk.W)
 
         log_frame = ttk.LabelFrame(main, text="Logs", padding=8)
         log_frame.grid(row=4, column=0, sticky=tk.NSEW)
@@ -262,6 +284,7 @@ class PosterApp:
 
     def _build_config(self) -> dict:
         enabled_layers = [key for key, _, _ in self.layer_options if self.layer_vars[key].get()]
+        selected_road_types = [key for key, _, _ in self.road_type_options if self.road_type_vars[key].get()]
         return {
             "city": self.city_var.get().strip(),
             "country": self.country_var.get().strip(),
@@ -295,6 +318,7 @@ class PosterApp:
                 "attr_pos": {"x": self.attr_x_var.get().strip(), "y": self.attr_y_var.get().strip()},
             },
             "enabled_layers": enabled_layers,
+            "road_types": selected_road_types,
             "version": 1,
         }
 
@@ -396,6 +420,12 @@ class PosterApp:
             enabled_set = {layer for layer in enabled_layers if isinstance(layer, str)}
             for key, _, _ in self.layer_options:
                 self.layer_vars[key].set(key in enabled_set)
+
+        road_types = config.get("road_types")
+        if isinstance(road_types, list):
+            road_set = {road for road in road_types if isinstance(road, str)}
+            for key, _, _ in self.road_type_options:
+                self.road_type_vars[key].set(key in road_set)
         self.log(f"Configuração carregada de: {file_path}")
         messagebox.showinfo("Configuração carregada", "Configuração carregada com sucesso.")
 
@@ -437,6 +467,14 @@ class PosterApp:
             self.log(f"Temas selecionados: {', '.join(themes_to_generate)}")
             selected_layers = [key for key, _, _ in self.layer_options if self.layer_vars[key].get()]
             selected_labels = [label for key, label, _ in self.layer_options if self.layer_vars[key].get()]
+            selected_road_bases = [key for key, _, _ in self.road_type_options if self.road_type_vars[key].get()]
+            selected_road_types = []
+            for base in selected_road_bases:
+                selected_road_types.extend([base, f"{base}_link"])
+            if selected_road_bases:
+                self.log(f"Tipos de rua: {', '.join(selected_road_bases)} (+ links)")
+            else:
+                self.log("Tipos de rua: nenhum")
             if selected_labels:
                 self.log(f"Camadas OSMnx: {', '.join(selected_labels)}")
             else:
@@ -477,6 +515,7 @@ class PosterApp:
                     name_label=self.name_label_var.get().strip() or None,
                     refresh_cache=self.refresh_cache_var.get(),
                     enabled_layers=selected_layers,
+                    road_types=selected_road_types,
                     text_options=text_options,
                 )
 

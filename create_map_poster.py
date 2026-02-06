@@ -150,6 +150,7 @@ def create_poster(
     fonts=None,
     pad_inches=0.05,
     enabled_layers=None,
+    road_types=None,
     text_options=None,
 ):
     print(f"\nGenerating map for {city}, {country}...")
@@ -318,6 +319,12 @@ def create_poster(
 
         # Normalize highway values (take first element if list, fallback to 'unclassified')
         edges["highway_norm"] = edges["highway"].apply(lambda h: (h[0] if isinstance(h, list) and h else h) or 'unclassified')
+        if road_types is not None:
+            selected_roads = set(road_types)
+            if selected_roads:
+                edges = edges[edges["highway_norm"].isin(selected_roads)]
+            else:
+                edges = edges.iloc[0:0]
 
         # Define a road style library
         ROAD_STYLES = {
@@ -342,15 +349,16 @@ def create_poster(
             'motorway_link':  {'order': 7, 'color': THEME.get("road_motorway", THEME["road_default"]), 'width': 1.2},
         }
 
-        # Apply styles to edges
-        edges["draw_order"] = edges["highway_norm"].map(lambda h: ROAD_STYLES.get(h, {'order':1})['order'])
-        edges["color"]      = edges["highway_norm"].map(lambda h: ROAD_STYLES.get(h, {'color':THEME["road_default"]})['color'])
-        edges["width"]      = edges["highway_norm"].map(lambda h: ROAD_STYLES.get(h, {'width':0.4})['width'])
+        if not edges.empty:
+            # Apply styles to edges
+            edges["draw_order"] = edges["highway_norm"].map(lambda h: ROAD_STYLES.get(h, {'order':1})['order'])
+            edges["color"]      = edges["highway_norm"].map(lambda h: ROAD_STYLES.get(h, {'color':THEME["road_default"]})['color'])
+            edges["width"]      = edges["highway_norm"].map(lambda h: ROAD_STYLES.get(h, {'width':0.4})['width'])
 
-        # Sort by draw order so smaller roads are plotted on top of larger ones
-        edges = edges.sort_values("draw_order")
-        coll = edges.plot(ax=ax,color=edges["color"],linewidth=edges["width"] * line_scale_factor,zorder=5)   
-        ax.collections[-1].set_capstyle("round")  # Round end of line
+            # Sort by draw order so smaller roads are plotted on top of larger ones
+            edges = edges.sort_values("draw_order")
+            coll = edges.plot(ax=ax,color=edges["color"],linewidth=edges["width"] * line_scale_factor,zorder=5)   
+            ax.collections[-1].set_capstyle("round")  # Round end of line
 
     # Layer 3: Gradients (Top and Bottom)
     create_gradient_fade(ax, THEME['gradient_color'], location='bottom', zorder=10)
