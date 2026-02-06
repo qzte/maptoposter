@@ -1,3 +1,4 @@
+import inspect
 import json
 import threading
 import tkinter as tk
@@ -105,11 +106,14 @@ class PosterApp:
         ]
         self.road_type_vars: dict[str, tk.BooleanVar] = {}
         self.road_type_options = [
-            ("tertiary", "Tertiary (+link)", True),
-            ("secondary", "Secondary (+link)", True),
-            ("primary", "Primary (+link)", True),
-            ("trunk", "Trunk (+link)", True),
-            ("motorway", "Motorway (+link)", True),
+            ("path", "Trilhas/Ciclovias", False, False),
+            ("service", "Serviço", False, False),
+            ("residential", "Residencial", True, False),
+            ("tertiary", "Tertiary (+link)", True, True),
+            ("secondary", "Secondary (+link)", True, True),
+            ("primary", "Primary (+link)", True, True),
+            ("trunk", "Trunk (+link)", True, True),
+            ("motorway", "Motorway (+link)", True, True),
         ]
 
         self._add_row(form, 0, "Cidade", self.city_var)
@@ -210,7 +214,7 @@ class PosterApp:
         options_tabs.add(roads_frame, text="Ruas")
         roads_frame.columnconfigure(0, weight=1)
         roads_frame.columnconfigure(1, weight=1)
-        for index, (key, label, default) in enumerate(self.road_type_options):
+        for index, (key, label, default, _) in enumerate(self.road_type_options):
             var = tk.BooleanVar(value=default)
             self.road_type_vars[key] = var
             column = index % 2
@@ -284,7 +288,7 @@ class PosterApp:
 
     def _build_config(self) -> dict:
         enabled_layers = [key for key, _, _ in self.layer_options if self.layer_vars[key].get()]
-        selected_road_types = [key for key, _, _ in self.road_type_options if self.road_type_vars[key].get()]
+        selected_road_types = [key for key, _, _, _ in self.road_type_options if self.road_type_vars[key].get()]
         return {
             "city": self.city_var.get().strip(),
             "country": self.country_var.get().strip(),
@@ -424,8 +428,12 @@ class PosterApp:
         road_types = config.get("road_types")
         if isinstance(road_types, list):
             road_set = {road for road in road_types if isinstance(road, str)}
-            for key, _, _ in self.road_type_options:
-                self.road_type_vars[key].set(key in road_set)
+            option_map = {key: include_link for key, _, _, include_link in self.road_type_options}
+            for key in option_map:
+                include_link = option_map[key]
+                self.road_type_vars[key].set(
+                    key in road_set or (include_link and f"{key}_link" in road_set)
+                )
         self.log(f"Configuração carregada de: {file_path}")
         messagebox.showinfo("Configuração carregada", "Configuração carregada com sucesso.")
 
@@ -467,10 +475,13 @@ class PosterApp:
             self.log(f"Temas selecionados: {', '.join(themes_to_generate)}")
             selected_layers = [key for key, _, _ in self.layer_options if self.layer_vars[key].get()]
             selected_labels = [label for key, label, _ in self.layer_options if self.layer_vars[key].get()]
-            selected_road_bases = [key for key, _, _ in self.road_type_options if self.road_type_vars[key].get()]
+            selected_road_bases = [key for key, _, _, _ in self.road_type_options if self.road_type_vars[key].get()]
             selected_road_types = []
+            option_map = {key: include_link for key, _, _, include_link in self.road_type_options}
             for base in selected_road_bases:
-                selected_road_types.extend([base, f"{base}_link"])
+                selected_road_types.append(base)
+                if option_map.get(base):
+                    selected_road_types.append(f"{base}_link")
             if selected_road_bases:
                 self.log(f"Tipos de rua: {', '.join(selected_road_bases)} (+ links)")
             else:
@@ -501,6 +512,21 @@ class PosterApp:
                     "line_y": float(self.line_y_var.get()),
                     "attr_pos": (float(self.attr_x_var.get()), float(self.attr_y_var.get())),
                 }
+                poster_kwargs = {
+                    "width": width,
+                    "height": height,
+                    "dpi": dpi,
+                    "country_label": self.country_label_var.get().strip() or None,
+                    "name_label": self.name_label_var.get().strip() or None,
+                    "refresh_cache": self.refresh_cache_var.get(),
+                    "enabled_layers": selected_layers,
+                    "text_options": text_options,
+                }
+                create_sig = inspect.signature(poster.create_poster)
+                if "road_types" in create_sig.parameters or any(
+                    param.kind == inspect.Parameter.VAR_KEYWORD for param in create_sig.parameters.values()
+                ):
+                    poster_kwargs["road_types"] = selected_road_types
                 poster.create_poster(
                     city,
                     country,
@@ -508,15 +534,7 @@ class PosterApp:
                     distance,
                     output_file,
                     output_format,
-                    width=width,
-                    height=height,
-                    dpi=dpi,
-                    country_label=self.country_label_var.get().strip() or None,
-                    name_label=self.name_label_var.get().strip() or None,
-                    refresh_cache=self.refresh_cache_var.get(),
-                    enabled_layers=selected_layers,
-                    road_types=selected_road_types,
-                    text_options=text_options,
+                    **poster_kwargs,
                 )
 
             self.log("Geração concluída com sucesso!")
