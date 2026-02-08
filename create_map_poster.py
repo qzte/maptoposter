@@ -185,6 +185,7 @@ def create_poster(
     pad_inches=0.05,
     enabled_layers=None,
     text_options=None,
+    poi_options=None,
     gradient_enabled=True,
     gradient_percent=25.0,
     gradient_orientation="vertical",
@@ -457,6 +458,41 @@ def create_poster(
                 zorder=10,
                 extent_ratio=extent_ratio,
             )
+
+    if isinstance(poi_options, dict) and poi_options.get("coords"):
+        poi_coords = poi_options["coords"]
+        try:
+            poi_lat, poi_lon = float(poi_coords[0]), float(poi_coords[1])
+        except (TypeError, ValueError, IndexError) as exc:
+            raise ValueError("Coordenadas do ponto de interesse inválidas.") from exc
+        poi_color = poi_options.get("color", "#e53935")
+        poi_size = float(poi_options.get("size", 12))
+        icon_label = poi_options.get("icon", "Círculo")
+        marker_map = {
+            "Círculo": "o",
+            "Quadrado": "s",
+            "Estrela": "*",
+            "Losango": "D",
+            "Alfinete": "v",
+            "Casa": r"$\u2302$",
+            "Coração": r"$\u2665$",
+            "Pin": "P",
+            "X": "X",
+        }
+        marker = marker_map.get(icon_label, "o")
+        poi_point = ox.projection.project_geometry(
+            Point(poi_lon, poi_lat),
+            crs="EPSG:4326",
+            to_crs=G_proj.graph["crs"],
+        )[0]
+        ax.scatter(
+            [poi_point.x],
+            [poi_point.y],
+            s=poi_size**2,
+            marker=marker,
+            color=poi_color,
+            zorder=12,
+        )
     
     # Calculate scale factor based on smaller dimension (reference 12 inches)
     # This ensures text scales properly for both portrait and landscape orientations
