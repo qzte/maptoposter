@@ -189,6 +189,9 @@ class PosterApp:
             "Estrela": "*",
             "Losango": "D",
             "Alfinete": "v",
+            "Casa": r"$\u2302$",
+            "Coração": r"$\u2665$",
+            "Pin": "P",
             "X": "X",
         }
         self.font_family_var = tk.StringVar()
