@@ -324,6 +324,7 @@ class PosterApp:
             values=font_options,
             state="readonly",
             style="TCombobox",
+            style="Text.TEntry",
         ).grid(row=1, column=1, sticky=tk.EW, pady=6)
 
         text_grid = ttk.Frame(text_frame, style="Card.TFrame", padding=6)
