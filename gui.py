@@ -8,6 +8,7 @@ from tkinter.scrolledtext import ScrolledText
 
 import create_map_poster as poster
 from lat_lon_parser import parse
+from map_poster.font_management import list_local_font_families
 from map_poster.theme_management import get_available_themes, load_theme
 
 
@@ -26,6 +27,7 @@ class PosterApp:
             messagebox.showerror("Erro", "Nenhum tema encontrado em themes/.")
             self.root.destroy()
             return
+        self.local_font_families = list_local_font_families()
 
         self._build_ui()
 
@@ -315,9 +317,13 @@ class PosterApp:
         ttk.Checkbutton(show_row, text="Linha separadora", variable=self.show_line_var).pack(side=tk.LEFT, padx=(0, 12))
 
         ttk.Label(text_frame, text="Fonte (Google Fonts ou vazio p/ padrão)").grid(row=1, column=0, sticky=tk.W, pady=6)
-        ttk.Entry(text_frame, textvariable=self.font_family_var, style="Text.TEntry").grid(
-            row=1, column=1, sticky=tk.EW, pady=6
-        )
+        font_options = [""] + self.local_font_families
+        ttk.Combobox(
+            text_frame,
+            textvariable=self.font_family_var,
+            values=font_options,
+            style="Text.TEntry",
+        ).grid(row=1, column=1, sticky=tk.EW, pady=6)
 
         text_grid = ttk.Frame(text_frame, style="Card.TFrame", padding=6)
         text_grid.grid(row=2, column=0, columnspan=2, sticky=tk.EW, pady=4)
