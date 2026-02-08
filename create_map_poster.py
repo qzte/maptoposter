@@ -491,6 +491,7 @@ def create_poster(
             s=poi_size**2,
             marker=marker,
             color=poi_color,
+            zorder=12,
             zorder=9,
         )
     

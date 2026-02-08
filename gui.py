@@ -392,6 +392,13 @@ class PosterApp:
             poi_frame,
             text="Adicionar ponto de interesse",
             variable=self.poi_enabled_var,
+        ).grid(row=0, column=0, sticky=tk.W, pady=(0, 8))
+        ttk.Button(
+            poi_frame,
+            text="Adicionar ao mapa",
+            command=self._enable_poi,
+            style="Secondary.TButton",
+        ).grid(row=0, column=1, sticky=tk.E, pady=(0, 8))
         ).grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 8))
         ttk.Label(poi_frame, text="Link Google Maps ou lat, lon").grid(row=1, column=0, sticky=tk.W, pady=4)
         ttk.Entry(poi_frame, textvariable=self.poi_location_var, style="Text.TEntry").grid(
@@ -408,6 +415,13 @@ class PosterApp:
         ttk.Label(poi_frame, text="Tamanho (pt)").grid(row=3, column=0, sticky=tk.W, pady=4)
         ttk.Entry(poi_frame, textvariable=self.poi_size_var, width=8).grid(row=3, column=1, sticky=tk.W, pady=4)
         ttk.Label(poi_frame, text="Cor (hex)").grid(row=4, column=0, sticky=tk.W, pady=4)
+        color_row = ttk.Frame(poi_frame, style="Card.TFrame")
+        color_row.grid(row=4, column=1, sticky=tk.W, pady=4)
+        ttk.Entry(color_row, textvariable=self.poi_color_var, width=12).pack(side=tk.LEFT)
+        self.poi_color_preview = tk.Canvas(color_row, width=22, height=22, highlightthickness=1)
+        self.poi_color_preview.pack(side=tk.LEFT, padx=(8, 0))
+        self._update_poi_color_preview()
+        self.poi_color_var.trace_add("write", self._update_poi_color_preview)
         ttk.Entry(poi_frame, textvariable=self.poi_color_var, width=12).grid(row=4, column=1, sticky=tk.W, pady=4)
 
         log_frame = ttk.LabelFrame(main, text="Logs", padding=12)
@@ -455,6 +469,17 @@ class PosterApp:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky=tk.W, pady=6)
         entry = ttk.Entry(parent, textvariable=variable)
         entry.grid(row=row, column=1, sticky=tk.EW, pady=6)
+
+    def _enable_poi(self) -> None:
+        self.poi_enabled_var.set(True)
+        self.log("Ponto de interesse ativado.")
+
+    def _update_poi_color_preview(self, *_: object) -> None:
+        color = self.poi_color_var.get().strip() or "#ffffff"
+        try:
+            self.poi_color_preview.configure(background=color)
+        except tk.TclError:
+            self.poi_color_preview.configure(background="#ffffff")
 
     def _parse_coordinates(self, value: str) -> tuple[float, float]:
         parts = [part.strip() for part in value.split(",")]
