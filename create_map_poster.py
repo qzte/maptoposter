@@ -492,7 +492,6 @@ def create_poster(
             marker=marker,
             color=poi_color,
             zorder=12,
-            zorder=9,
         )
     
     # Calculate scale factor based on smaller dimension (reference 12 inches)
