@@ -399,7 +399,6 @@ class PosterApp:
             command=self._enable_poi,
             style="Secondary.TButton",
         ).grid(row=0, column=1, sticky=tk.E, pady=(0, 8))
-        ).grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 8))
         ttk.Label(poi_frame, text="Link Google Maps ou lat, lon").grid(row=1, column=0, sticky=tk.W, pady=4)
         ttk.Entry(poi_frame, textvariable=self.poi_location_var, style="Text.TEntry").grid(
             row=1, column=1, sticky=tk.EW, pady=4
@@ -422,7 +421,6 @@ class PosterApp:
         self.poi_color_preview.pack(side=tk.LEFT, padx=(8, 0))
         self._update_poi_color_preview()
         self.poi_color_var.trace_add("write", self._update_poi_color_preview)
-        ttk.Entry(poi_frame, textvariable=self.poi_color_var, width=12).grid(row=4, column=1, sticky=tk.W, pady=4)
 
         log_frame = ttk.LabelFrame(main, text="Logs", padding=12)
         log_frame.grid(row=4, column=0, sticky=tk.NSEW)
