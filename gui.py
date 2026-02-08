@@ -322,6 +322,8 @@ class PosterApp:
             text_frame,
             textvariable=self.font_family_var,
             values=font_options,
+            state="readonly",
+            style="TCombobox",
             style="Text.TEntry",
         ).grid(row=1, column=1, sticky=tk.EW, pady=6)
 
