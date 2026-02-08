@@ -6,6 +6,7 @@ from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
 import create_map_poster as poster
+from lat_lon_parser import parse
 from map_poster.theme_management import get_available_themes, load_theme
 
 
@@ -375,10 +376,12 @@ class PosterApp:
         if len(parts) != 2:
             raise ValueError("Informe coordenadas no formato: lat, lon.")
         try:
-            lat = float(parts[0])
-            lon = float(parts[1])
+            lat = parse(parts[0])
+            lon = parse(parts[1])
         except ValueError as exc:
-            raise ValueError("Coordenadas inválidas. Use números decimais.") from exc
+            raise ValueError(
+                "Coordenadas inválidas. Use números decimais ou DMS com direção (ex: 23°30'0\"S)."
+            ) from exc
         if not (-90 <= lat <= 90 and -180 <= lon <= 180):
             raise ValueError("Coordenadas fora do intervalo permitido.")
         return (lat, lon)
