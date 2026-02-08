@@ -34,39 +34,81 @@ def generate_output_filename(city, theme_name, output_format):
     filename = f"{city_slug}_{theme_name}_{timestamp}.{ext}"
     return os.path.join(POSTERS_DIR, city, filename)
 
-def create_gradient_fade(ax, color, location='bottom', zorder=10):
+def create_gradient_fade(
+    ax,
+    color,
+    location="bottom",
+    orientation="vertical",
+    zorder=10,
+    extent_ratio=0.25,
+):
     """
-    Creates a fade effect at the top or bottom of the map.
+    Creates a fade effect on the selected edge(s) of the map.
     """
-    vals = np.linspace(0, 1, 256).reshape(-1, 1)
-    gradient = np.hstack((vals, vals))
-    
+    extent_ratio = max(0.0, min(extent_ratio, 0.5))
+    orientation = orientation.lower()
+
+    if orientation == "horizontal":
+        vals = np.linspace(0, 1, 256)
+        gradient = np.tile(vals, (2, 1))
+    else:
+        vals = np.linspace(0, 1, 256).reshape(-1, 1)
+        gradient = np.hstack((vals, vals))
+
     rgb = mcolors.to_rgb(color)
     my_colors = np.zeros((256, 4))
     my_colors[:, 0] = rgb[0]
     my_colors[:, 1] = rgb[1]
     my_colors[:, 2] = rgb[2]
-    
-    if location == 'bottom':
-        my_colors[:, 3] = np.linspace(1, 0, 256)
-        extent_y_start = 0
-        extent_y_end = 0.25
+
+    if orientation == "horizontal":
+        if location == "left":
+            my_colors[:, 3] = np.linspace(1, 0, 256)
+            extent_x_start = 0.0
+            extent_x_end = extent_ratio
+        else:
+            my_colors[:, 3] = np.linspace(0, 1, 256)
+            extent_x_start = 1.0 - extent_ratio
+            extent_x_end = 1.0
     else:
-        my_colors[:, 3] = np.linspace(0, 1, 256)
-        extent_y_start = 0.75
-        extent_y_end = 1.0
+        if location == "bottom":
+            my_colors[:, 3] = np.linspace(1, 0, 256)
+            extent_y_start = 0.0
+            extent_y_end = extent_ratio
+        else:
+            my_colors[:, 3] = np.linspace(0, 1, 256)
+            extent_y_start = 1.0 - extent_ratio
+            extent_y_end = 1.0
 
     custom_cmap = mcolors.ListedColormap(my_colors)
-    
+
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
-    y_range = ylim[1] - ylim[0]
-    
-    y_bottom = ylim[0] + y_range * extent_y_start
-    y_top = ylim[0] + y_range * extent_y_end
-    
-    ax.imshow(gradient, extent=[xlim[0], xlim[1], y_bottom, y_top], 
-              aspect='auto', cmap=custom_cmap, zorder=zorder, origin='lower')
+
+    if orientation == "horizontal":
+        x_range = xlim[1] - xlim[0]
+        x_left = xlim[0] + x_range * extent_x_start
+        x_right = xlim[0] + x_range * extent_x_end
+        ax.imshow(
+            gradient,
+            extent=[x_left, x_right, ylim[0], ylim[1]],
+            aspect="auto",
+            cmap=custom_cmap,
+            zorder=zorder,
+            origin="lower",
+        )
+    else:
+        y_range = ylim[1] - ylim[0]
+        y_bottom = ylim[0] + y_range * extent_y_start
+        y_top = ylim[0] + y_range * extent_y_end
+        ax.imshow(
+            gradient,
+            extent=[xlim[0], xlim[1], y_bottom, y_top],
+            aspect="auto",
+            cmap=custom_cmap,
+            zorder=zorder,
+            origin="lower",
+        )
     
 def get_crop_limits(G_proj, center_lat_lon, fig, dist):
     """
@@ -123,7 +165,30 @@ def calculate_line_scaling(crop_xlim, crop_ylim, width, dpi, px_per_m_ref):
     return px_per_m_cur / px_per_m_ref
     
 
-def create_poster(city, country, point, dist, output_file, output_format, width=12, height=16, dpi=300, px_per_m_ref=0.096, country_label=None, name_label=None, refresh_cache=False, display_city=None, display_country=None, fonts=None, pad_inches=0.05, enabled_layers=None, text_options=None):
+def create_poster(
+    city,
+    country,
+    point,
+    dist,
+    output_file,
+    output_format,
+    width=12,
+    height=16,
+    dpi=300,
+    px_per_m_ref=0.096,
+    country_label=None,
+    name_label=None,
+    refresh_cache=False,
+    display_city=None,
+    display_country=None,
+    fonts=None,
+    pad_inches=0.05,
+    enabled_layers=None,
+    text_options=None,
+    gradient_enabled=True,
+    gradient_percent=25.0,
+    gradient_orientation="vertical",
+):
     print(f"\nGenerating map for {city}, {country}...")
 
     #value init
@@ -321,9 +386,77 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
                 subset.plot(ax=ax, color=THEME[core_key], linewidth=0.3 * subset["width"] * line_scale_factor, zorder=5 + order * 0.01 + 0.005, alpha=0.9) #add core lines in between defined road order
                 ax.collections[-1].set_capstyle("round")
 
-    # Layer 3: Gradients (Top and Bottom)
-    create_gradient_fade(ax, THEME['gradient_color'], location='bottom', zorder=10)
-    create_gradient_fade(ax, THEME['gradient_color'], location='top', zorder=10)
+    # Layer 3: Gradients
+    if gradient_enabled and gradient_percent:
+        extent_ratio = max(0.0, min(float(gradient_percent) / 100.0, 0.5))
+        orientation = str(gradient_orientation).lower()
+        if orientation == "horizontal":
+            create_gradient_fade(
+                ax,
+                THEME["gradient_color"],
+                location="left",
+                orientation="horizontal",
+                zorder=10,
+                extent_ratio=extent_ratio,
+            )
+            create_gradient_fade(
+                ax,
+                THEME["gradient_color"],
+                location="right",
+                orientation="horizontal",
+                zorder=10,
+                extent_ratio=extent_ratio,
+            )
+        elif orientation == "both":
+            create_gradient_fade(
+                ax,
+                THEME["gradient_color"],
+                location="bottom",
+                orientation="vertical",
+                zorder=10,
+                extent_ratio=extent_ratio,
+            )
+            create_gradient_fade(
+                ax,
+                THEME["gradient_color"],
+                location="top",
+                orientation="vertical",
+                zorder=10,
+                extent_ratio=extent_ratio,
+            )
+            create_gradient_fade(
+                ax,
+                THEME["gradient_color"],
+                location="left",
+                orientation="horizontal",
+                zorder=10,
+                extent_ratio=extent_ratio,
+            )
+            create_gradient_fade(
+                ax,
+                THEME["gradient_color"],
+                location="right",
+                orientation="horizontal",
+                zorder=10,
+                extent_ratio=extent_ratio,
+            )
+        else:
+            create_gradient_fade(
+                ax,
+                THEME["gradient_color"],
+                location="bottom",
+                orientation="vertical",
+                zorder=10,
+                extent_ratio=extent_ratio,
+            )
+            create_gradient_fade(
+                ax,
+                THEME["gradient_color"],
+                location="top",
+                orientation="vertical",
+                zorder=10,
+                extent_ratio=extent_ratio,
+            )
     
     # Calculate scale factor based on smaller dimension (reference 12 inches)
     # This ensures text scales properly for both portrait and landscape orientations
