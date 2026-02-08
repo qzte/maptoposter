@@ -1,6 +1,7 @@
 import osmnx as ox
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+from matplotlib.path import Path as MplPath
 import numpy as np
 from tqdm import tqdm
 import os
@@ -15,11 +16,42 @@ from map_poster.theme_management import load_theme
 from map_poster.fetch import fetch_features, fetch_graph, fetch_ocean_polygons, get_coordinates
 from pathlib import Path
 from lat_lon_parser import parse
+from svgpath2mpl import parse_path
+import xml.etree.ElementTree as ET
 
 POSTERS_DIR = "posters"
 WATER_POLY_DIR = Path("cache/water_polygons")
 
 THEME = dict[str, str]()  # Will be loaded later
+
+def _load_svg_marker(svg_path: str) -> MplPath:
+    path = Path(svg_path).expanduser()
+    if not path.exists():
+        raise ValueError(f"Arquivo SVG não encontrado: {svg_path}")
+    try:
+        svg_root = ET.parse(path).getroot()
+    except ET.ParseError as exc:
+        raise ValueError("Não foi possível ler o SVG do marcador.") from exc
+
+    svg_path_element = None
+    for element in svg_root.iter():
+        if element.tag.endswith("path") and element.get("d"):
+            svg_path_element = element
+            break
+
+    if svg_path_element is None:
+        raise ValueError("O SVG precisa ter ao menos um elemento <path>.")
+
+    mpl_path = parse_path(svg_path_element.get("d", ""))
+    vertices = mpl_path.vertices
+    min_xy = vertices.min(axis=0)
+    max_xy = vertices.max(axis=0)
+    size = max(max_xy - min_xy)
+    if size == 0:
+        raise ValueError("O caminho do SVG do marcador é inválido.")
+    centered = vertices - (min_xy + max_xy) / 2
+    normalized = centered / size
+    return MplPath(normalized, mpl_path.codes)
 
 def generate_output_filename(city, theme_name, output_format):
     """
@@ -467,19 +499,23 @@ def create_poster(
             raise ValueError("Coordenadas do ponto de interesse inválidas.") from exc
         poi_color = poi_options.get("color", "#e53935")
         poi_size = float(poi_options.get("size", 12))
-        icon_label = poi_options.get("icon", "Círculo")
-        marker_map = {
-            "Círculo": "o",
-            "Quadrado": "s",
-            "Estrela": "*",
-            "Losango": "D",
-            "Alfinete": "v",
-            "Casa": "⌂",
-            "Coração": r"$\u2665$",
-            "Pin": "P",
-            "X": "X",
-        }
-        marker = marker_map.get(icon_label, "o")
+        svg_path = poi_options.get("svg_path")
+        if isinstance(svg_path, str) and svg_path.strip():
+            marker = _load_svg_marker(svg_path.strip())
+        else:
+            icon_label = poi_options.get("icon", "Círculo")
+            marker_map = {
+                "Círculo": "o",
+                "Quadrado": "s",
+                "Estrela": "*",
+                "Losango": "D",
+                "Alfinete": "v",
+                "Casa": "⌂",
+                "Coração": r"$\u2665$",
+                "Pin": "P",
+                "X": "X",
+            }
+            marker = marker_map.get(icon_label, "o")
         poi_point = ox.projection.project_geometry(
             Point(poi_lon, poi_lat),
             crs="EPSG:4326",
