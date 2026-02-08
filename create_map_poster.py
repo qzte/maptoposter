@@ -216,6 +216,7 @@ def create_poster(
     fonts=None,
     pad_inches=0.05,
     enabled_layers=None,
+    road_types=None,
     text_options=None,
     poi_options=None,
     gradient_enabled=True,
@@ -374,6 +375,13 @@ def create_poster(
 
         # Normalize highway values (take first element if list, fallback to 'unclassified')
         edges["highway_norm"] = edges["highway"].apply(lambda h: (h[0] if isinstance(h, list) and h else h) or 'unclassified')
+        if isinstance(road_types, list):
+            road_set = {road for road in road_types if isinstance(road, str)}
+            if not road_set:
+                print("No road types selected; skipping roads.")
+                edges = edges.iloc[0:0]
+            else:
+                edges = edges[edges["highway_norm"].isin(road_set)]
 
         # Define a road style library
         ROAD_STYLES = {
@@ -398,26 +406,27 @@ def create_poster(
             'motorway_link':  {'order': 7, 'theme_key': 'road_motorway', 'width': 1.2},
         }
 
-        # Apply styles to edges
-        edges["style"] = edges["highway_norm"].map(lambda h: ROAD_STYLES.get(h))
-        edges["draw_order"] = edges["style"].map(lambda s: s["order"] if s else 1)
-        edges["width"]      = edges["style"].map(lambda s: s["width"] if s else 0.4)
-        edges["theme_key"]  = edges["style"].map(lambda s: s["theme_key"] if s else "road_default")
-        edges["color"]      = edges["theme_key"].map(lambda k: THEME.get(k, THEME["road_default"]))
+        if not edges.empty:
+            # Apply styles to edges
+            edges["style"] = edges["highway_norm"].map(lambda h: ROAD_STYLES.get(h))
+            edges["draw_order"] = edges["style"].map(lambda s: s["order"] if s else 1)
+            edges["width"]      = edges["style"].map(lambda s: s["width"] if s else 0.4)
+            edges["theme_key"]  = edges["style"].map(lambda s: s["theme_key"] if s else "road_default")
+            edges["color"]      = edges["theme_key"].map(lambda k: THEME.get(k, THEME["road_default"]))
 
-        # Draw roads per hierarchy level
-        for order in sorted(edges["draw_order"].unique()):
-            subset = edges[edges["draw_order"] == order]
+            # Draw roads per hierarchy level
+            for order in sorted(edges["draw_order"].unique()):
+                subset = edges[edges["draw_order"] == order]
 
-            # Base pass
-            subset.plot(ax=ax, color=subset["color"], linewidth=subset["width"] * line_scale_factor, zorder=5 + order * 0.01)
-            ax.collections[-1].set_capstyle("round")
-
-            # Extra core line if defined in THEME
-            core_key = f"{subset.iloc[0]['theme_key']}_core"
-            if core_key in THEME:
-                subset.plot(ax=ax, color=THEME[core_key], linewidth=0.3 * subset["width"] * line_scale_factor, zorder=5 + order * 0.01 + 0.005, alpha=0.9) #add core lines in between defined road order
+                # Base pass
+                subset.plot(ax=ax, color=subset["color"], linewidth=subset["width"] * line_scale_factor, zorder=5 + order * 0.01)
                 ax.collections[-1].set_capstyle("round")
+
+                # Extra core line if defined in THEME
+                core_key = f"{subset.iloc[0]['theme_key']}_core"
+                if core_key in THEME:
+                    subset.plot(ax=ax, color=THEME[core_key], linewidth=0.3 * subset["width"] * line_scale_factor, zorder=5 + order * 0.01 + 0.005, alpha=0.9) #add core lines in between defined road order
+                    ax.collections[-1].set_capstyle("round")
 
     # Layer 3: Gradients
     if gradient_enabled and gradient_percent:
