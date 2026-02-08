@@ -74,6 +74,15 @@ class PosterApp:
             padding=6,
         )
         self.style.configure(
+            "Text.TEntry",
+            fieldbackground="white",
+            foreground=self.colors["text"],
+            bordercolor=self.colors["accent_light"],
+            lightcolor=self.colors["accent_light"],
+            darkcolor=self.colors["accent_light"],
+            padding=8,
+        )
+        self.style.configure(
             "TCombobox",
             fieldbackground="white",
             foreground=self.colors["text"],
@@ -261,39 +270,46 @@ class PosterApp:
         ttk.Checkbutton(show_row, text="Crédito OSM", variable=self.show_attribution_var).pack(side=tk.LEFT, padx=(0, 12))
         ttk.Checkbutton(show_row, text="Linha separadora", variable=self.show_line_var).pack(side=tk.LEFT, padx=(0, 12))
 
-        self._add_row(text_frame, 1, "Fonte (Google Fonts ou vazio p/ padrão)", self.font_family_var)
-        size_frame = ttk.Frame(text_frame, style="Card.TFrame")
-        size_frame.grid(row=2, column=0, columnspan=2, sticky=tk.EW, pady=4)
-        size_frame.columnconfigure(1, weight=1)
-        ttk.Label(size_frame, text="Tamanhos (pt)").grid(row=0, column=0, sticky=tk.W)
-        ttk.Entry(size_frame, textvariable=self.font_main_size_var, width=6).grid(row=0, column=1, sticky=tk.W, padx=(8, 8))
-        ttk.Label(size_frame, text="Principal").grid(row=0, column=2, sticky=tk.W, padx=(0, 12))
-        ttk.Entry(size_frame, textvariable=self.font_sub_size_var, width=6).grid(row=0, column=3, sticky=tk.W, padx=(0, 8))
-        ttk.Label(size_frame, text="País").grid(row=0, column=4, sticky=tk.W, padx=(0, 12))
-        ttk.Entry(size_frame, textvariable=self.font_coords_size_var, width=6).grid(row=0, column=5, sticky=tk.W, padx=(0, 8))
-        ttk.Label(size_frame, text="Coords").grid(row=0, column=6, sticky=tk.W, padx=(0, 12))
-        ttk.Entry(size_frame, textvariable=self.font_attr_size_var, width=6).grid(row=0, column=7, sticky=tk.W, padx=(0, 8))
-        ttk.Label(size_frame, text="Crédito").grid(row=0, column=8, sticky=tk.W)
+        ttk.Label(text_frame, text="Fonte (Google Fonts ou vazio p/ padrão)").grid(row=1, column=0, sticky=tk.W, pady=6)
+        ttk.Entry(text_frame, textvariable=self.font_family_var, style="Text.TEntry").grid(
+            row=1, column=1, sticky=tk.EW, pady=6
+        )
 
-        pos_frame = ttk.Frame(text_frame, style="Card.TFrame")
-        pos_frame.grid(row=3, column=0, columnspan=2, sticky=tk.EW, pady=4)
-        ttk.Label(pos_frame, text="Posições (X/Y 0-1)").grid(row=0, column=0, sticky=tk.W)
-        ttk.Label(pos_frame, text="Cidade").grid(row=1, column=0, sticky=tk.W)
-        ttk.Entry(pos_frame, textvariable=self.city_x_var, width=6).grid(row=1, column=1, padx=(8, 4))
-        ttk.Entry(pos_frame, textvariable=self.city_y_var, width=6).grid(row=1, column=2, padx=(0, 12))
-        ttk.Label(pos_frame, text="País").grid(row=1, column=3, sticky=tk.W)
-        ttk.Entry(pos_frame, textvariable=self.country_x_var, width=6).grid(row=1, column=4, padx=(8, 4))
-        ttk.Entry(pos_frame, textvariable=self.country_y_var, width=6).grid(row=1, column=5, padx=(0, 12))
-        ttk.Label(pos_frame, text="Coords").grid(row=1, column=6, sticky=tk.W)
-        ttk.Entry(pos_frame, textvariable=self.coords_x_var, width=6).grid(row=1, column=7, padx=(8, 4))
-        ttk.Entry(pos_frame, textvariable=self.coords_y_var, width=6).grid(row=1, column=8, padx=(0, 12))
-        ttk.Label(pos_frame, text="Linha").grid(row=2, column=0, sticky=tk.W)
-        ttk.Entry(pos_frame, textvariable=self.line_x_start_var, width=6).grid(row=2, column=1, padx=(8, 4))
-        ttk.Entry(pos_frame, textvariable=self.line_x_end_var, width=6).grid(row=2, column=2, padx=(0, 12))
-        ttk.Entry(pos_frame, textvariable=self.line_y_var, width=6).grid(row=2, column=3, padx=(0, 12))
-        ttk.Label(pos_frame, text="Crédito").grid(row=2, column=4, sticky=tk.W)
-        ttk.Entry(pos_frame, textvariable=self.attr_x_var, width=6).grid(row=2, column=5, padx=(8, 4))
-        ttk.Entry(pos_frame, textvariable=self.attr_y_var, width=6).grid(row=2, column=6, padx=(0, 12))
+        text_grid = ttk.Frame(text_frame, style="Card.TFrame", padding=6)
+        text_grid.grid(row=2, column=0, columnspan=2, sticky=tk.EW, pady=4)
+        for column in range(1, 6):
+            text_grid.columnconfigure(column, weight=1)
+        ttk.Label(text_grid, text="").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(text_grid, text="Cidade").grid(row=0, column=1, sticky=tk.W, padx=(4, 4))
+        ttk.Label(text_grid, text="País").grid(row=0, column=2, sticky=tk.W, padx=(4, 4))
+        ttk.Label(text_grid, text="Coords").grid(row=0, column=3, sticky=tk.W, padx=(4, 4))
+        ttk.Label(text_grid, text="Linha").grid(row=0, column=4, sticky=tk.W, padx=(4, 4))
+        ttk.Label(text_grid, text="Crédito").grid(row=0, column=5, sticky=tk.W, padx=(4, 4))
+
+        ttk.Label(text_grid, text="Tamanho (pt)").grid(row=1, column=0, sticky=tk.W, pady=(4, 2))
+        ttk.Entry(text_grid, textvariable=self.font_main_size_var, width=6).grid(row=1, column=1, sticky=tk.W, padx=4)
+        ttk.Entry(text_grid, textvariable=self.font_sub_size_var, width=6).grid(row=1, column=2, sticky=tk.W, padx=4)
+        ttk.Entry(text_grid, textvariable=self.font_coords_size_var, width=6).grid(row=1, column=3, sticky=tk.W, padx=4)
+        ttk.Label(text_grid, text="—").grid(row=1, column=4, sticky=tk.W, padx=4)
+        ttk.Entry(text_grid, textvariable=self.font_attr_size_var, width=6).grid(row=1, column=5, sticky=tk.W, padx=4)
+
+        ttk.Label(text_grid, text="Posição X").grid(row=2, column=0, sticky=tk.W, pady=(4, 2))
+        ttk.Entry(text_grid, textvariable=self.city_x_var, width=6).grid(row=2, column=1, sticky=tk.W, padx=4)
+        ttk.Entry(text_grid, textvariable=self.country_x_var, width=6).grid(row=2, column=2, sticky=tk.W, padx=4)
+        ttk.Entry(text_grid, textvariable=self.coords_x_var, width=6).grid(row=2, column=3, sticky=tk.W, padx=4)
+        line_x_frame = ttk.Frame(text_grid, style="Card.TFrame")
+        line_x_frame.grid(row=2, column=4, sticky=tk.W, padx=4)
+        ttk.Entry(line_x_frame, textvariable=self.line_x_start_var, width=6).pack(side=tk.LEFT)
+        ttk.Label(line_x_frame, text="→").pack(side=tk.LEFT, padx=2)
+        ttk.Entry(line_x_frame, textvariable=self.line_x_end_var, width=6).pack(side=tk.LEFT)
+        ttk.Entry(text_grid, textvariable=self.attr_x_var, width=6).grid(row=2, column=5, sticky=tk.W, padx=4)
+
+        ttk.Label(text_grid, text="Posição Y").grid(row=3, column=0, sticky=tk.W, pady=(4, 2))
+        ttk.Entry(text_grid, textvariable=self.city_y_var, width=6).grid(row=3, column=1, sticky=tk.W, padx=4)
+        ttk.Entry(text_grid, textvariable=self.country_y_var, width=6).grid(row=3, column=2, sticky=tk.W, padx=4)
+        ttk.Entry(text_grid, textvariable=self.coords_y_var, width=6).grid(row=3, column=3, sticky=tk.W, padx=4)
+        ttk.Entry(text_grid, textvariable=self.line_y_var, width=6).grid(row=3, column=4, sticky=tk.W, padx=4)
+        ttk.Entry(text_grid, textvariable=self.attr_y_var, width=6).grid(row=3, column=5, sticky=tk.W, padx=4)
 
         actions = ttk.Frame(main, padding=(0, 16, 0, 16), style="Card.TFrame")
         actions.grid(row=2, column=0, sticky=tk.EW)
