@@ -1,5 +1,6 @@
 import inspect
 import json
+import re
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -177,6 +178,22 @@ class PosterApp:
         self.gradient_enabled_var = tk.BooleanVar(value=True)
         self.gradient_percent_var = tk.StringVar(value="25")
         self.gradient_orientation_var = tk.StringVar(value="Vertical (topo/base)")
+        self.poi_enabled_var = tk.BooleanVar(value=False)
+        self.poi_location_var = tk.StringVar()
+        self.poi_icon_var = tk.StringVar(value="Círculo")
+        self.poi_size_var = tk.StringVar(value="12")
+        self.poi_color_var = tk.StringVar(value="#e53935")
+        self.poi_icon_options = {
+            "Círculo": "o",
+            "Quadrado": "s",
+            "Estrela": "*",
+            "Losango": "D",
+            "Alfinete": "v",
+            "Casa": r"$\u2302$",
+            "Coração": r"$\u2665$",
+            "Pin": "P",
+            "X": "X",
+        }
         self.font_family_var = tk.StringVar()
         self.font_main_size_var = tk.StringVar(value="60")
         self.font_sub_size_var = tk.StringVar(value="22")
@@ -368,6 +385,31 @@ class PosterApp:
             row = index // 2
             ttk.Checkbutton(roads_frame, text=label, variable=var).grid(row=row, column=column, sticky=tk.W)
 
+        poi_frame = ttk.Frame(options_tabs, padding=10, style="Card.TFrame")
+        options_tabs.add(poi_frame, text="Ponto de interesse")
+        poi_frame.columnconfigure(1, weight=1)
+        ttk.Checkbutton(
+            poi_frame,
+            text="Adicionar ponto de interesse",
+            variable=self.poi_enabled_var,
+        ).grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 8))
+        ttk.Label(poi_frame, text="Link Google Maps ou lat, lon").grid(row=1, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(poi_frame, textvariable=self.poi_location_var, style="Text.TEntry").grid(
+            row=1, column=1, sticky=tk.EW, pady=4
+        )
+        ttk.Label(poi_frame, text="Ícone").grid(row=2, column=0, sticky=tk.W, pady=4)
+        ttk.Combobox(
+            poi_frame,
+            textvariable=self.poi_icon_var,
+            values=list(self.poi_icon_options.keys()),
+            state="readonly",
+            width=18,
+        ).grid(row=2, column=1, sticky=tk.W, pady=4)
+        ttk.Label(poi_frame, text="Tamanho (pt)").grid(row=3, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(poi_frame, textvariable=self.poi_size_var, width=8).grid(row=3, column=1, sticky=tk.W, pady=4)
+        ttk.Label(poi_frame, text="Cor (hex)").grid(row=4, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(poi_frame, textvariable=self.poi_color_var, width=12).grid(row=4, column=1, sticky=tk.W, pady=4)
+
         log_frame = ttk.LabelFrame(main, text="Logs", padding=12)
         log_frame.grid(row=4, column=0, sticky=tk.NSEW)
         log_frame.columnconfigure(0, weight=1)
@@ -429,6 +471,30 @@ class PosterApp:
             raise ValueError("Coordenadas fora do intervalo permitido.")
         return (lat, lon)
 
+    def _extract_google_maps_coordinates(self, url: str) -> tuple[float, float] | None:
+        patterns = [
+            r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)",
+            r"[?&]q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)",
+            r"[?&]query=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)",
+            r"[?&]ll=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                return (float(match.group(1)), float(match.group(2)))
+        return None
+
+    def _parse_poi_location(self, value: str) -> tuple[float, float]:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Informe o link ou coordenadas do ponto de interesse.")
+        if cleaned.startswith("http"):
+            coords = self._extract_google_maps_coordinates(cleaned)
+            if coords is None:
+                raise ValueError("Não foi possível extrair coordenadas do link do Google Maps.")
+            return coords
+        return self._parse_coordinates(cleaned)
+
     def _get_gradient_orientation(self) -> str:
         mapping = {
             "Vertical (topo/base)": "vertical",
@@ -473,6 +539,13 @@ class PosterApp:
                 "enabled": self.gradient_enabled_var.get(),
                 "percent": self.gradient_percent_var.get().strip(),
                 "orientation": self._get_gradient_orientation(),
+            },
+            "poi": {
+                "enabled": self.poi_enabled_var.get(),
+                "location": self.poi_location_var.get().strip(),
+                "icon": self.poi_icon_var.get().strip(),
+                "size": self.poi_size_var.get().strip(),
+                "color": self.poi_color_var.get().strip(),
             },
             "text_options": {
                 "show_city": self.show_city_var.get(),
@@ -567,6 +640,16 @@ class PosterApp:
             }
             if isinstance(orientation, str):
                 self.gradient_orientation_var.set(orientation_map.get(orientation.lower(), "Vertical (topo/base)"))
+
+        poi = config.get("poi", {})
+        if isinstance(poi, dict):
+            self.poi_enabled_var.set(bool(poi.get("enabled", False)))
+            self.poi_location_var.set(str(poi.get("location", "")))
+            icon = poi.get("icon")
+            if isinstance(icon, str) and icon in self.poi_icon_options:
+                self.poi_icon_var.set(icon)
+            self.poi_size_var.set(str(poi.get("size", self.poi_size_var.get())))
+            self.poi_color_var.set(str(poi.get("color", self.poi_color_var.get())))
 
         text_options = config.get("text_options", {})
         if isinstance(text_options, dict):
@@ -710,6 +793,17 @@ class PosterApp:
                     "gradient_percent": gradient_percent,
                     "gradient_orientation": gradient_orientation,
                 }
+                if self.poi_enabled_var.get():
+                    poi_coords = self._parse_poi_location(self.poi_location_var.get())
+                    poi_size = float(self.poi_size_var.get())
+                    if poi_size <= 0:
+                        raise ValueError("O tamanho do ponto de interesse deve ser maior que zero.")
+                    poster_kwargs["poi_options"] = {
+                        "coords": poi_coords,
+                        "icon": self.poi_icon_var.get(),
+                        "size": poi_size,
+                        "color": self.poi_color_var.get().strip(),
+                    }
                 create_sig = inspect.signature(poster.create_poster)
                 has_kwargs = any(
                     param.kind == inspect.Parameter.VAR_KEYWORD for param in create_sig.parameters.values()
