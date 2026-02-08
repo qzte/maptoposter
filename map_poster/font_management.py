@@ -296,6 +296,17 @@ def _safe_float(value, fallback):
         return fallback
 
 
+def _decode_unicode_escapes(text: str) -> str:
+    if not isinstance(text, str):
+        return text
+    def replace_match(match: re.Match[str]) -> str:
+        return chr(int(match.group(1), 16))
+
+    text = re.sub(r"\\u([0-9a-fA-F]{4})", replace_match, text)
+    text = re.sub(r"\\U([0-9a-fA-F]{8})", replace_match, text)
+    return text
+
+
 def _parse_pos(value, default):
     if isinstance(value, (list, tuple)) and len(value) == 2:
         return (_safe_float(value[0], default[0]), _safe_float(value[1], default[1]))
@@ -319,6 +330,8 @@ def add_text(
     text_options=None,
 ):
     text_options = text_options or {}
+    display_city = _decode_unicode_escapes(display_city)
+    display_country = _decode_unicode_escapes(display_country)
     # Base font sizes (at 12 inches width)
     base_main = _safe_float(text_options.get("main_size"), 60)
     base_sub = _safe_float(text_options.get("sub_size"), 22)
