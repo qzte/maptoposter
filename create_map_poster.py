@@ -123,7 +123,7 @@ def calculate_line_scaling(crop_xlim, crop_ylim, width, dpi, px_per_m_ref):
     return px_per_m_cur / px_per_m_ref
     
 
-def create_poster(city, country, point, dist, output_file, output_format, width=12, height=16, dpi=300, px_per_m_ref=0.096, country_label=None, name_label=None, refresh_cache=False, display_city=None, display_country=None, fonts=None, pad_inches=0.05, enabled_layers=None):
+def create_poster(city, country, point, dist, output_file, output_format, width=12, height=16, dpi=300, px_per_m_ref=0.096, country_label=None, name_label=None, refresh_cache=False, display_city=None, display_country=None, fonts=None, pad_inches=0.05, enabled_layers=None, text_options=None):
     print(f"\nGenerating map for {city}, {country}...")
 
     #value init
@@ -330,8 +330,18 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
     font_scale_factor = min(height, width) / 12.0
 
     # 4. Typography - use custom fonts if provided, otherwise use default FONTS
-    add_text(font_scale_factor, display_city, display_country, point, ax, THEME['text'], zorder=11, fonts=fonts)
-    add_attribution(ax, THEME['text'], zorder=11)
+    add_text(
+        font_scale_factor,
+        display_city,
+        display_country,
+        point,
+        ax,
+        THEME['text'],
+        zorder=11,
+        fonts=fonts,
+        text_options=text_options,
+    )
+    add_attribution(ax, THEME['text'], zorder=11, text_options=text_options)
  
     # 5. Save
     print(f"Saving to {output_file}...")
