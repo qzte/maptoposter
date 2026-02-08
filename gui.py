@@ -174,6 +174,9 @@ class PosterApp:
         self.show_coords_var = tk.BooleanVar(value=True)
         self.show_attribution_var = tk.BooleanVar(value=True)
         self.show_line_var = tk.BooleanVar(value=True)
+        self.gradient_enabled_var = tk.BooleanVar(value=True)
+        self.gradient_percent_var = tk.StringVar(value="25")
+        self.gradient_orientation_var = tk.StringVar(value="Vertical (topo/base)")
         self.font_family_var = tk.StringVar()
         self.font_main_size_var = tk.StringVar(value="60")
         self.font_sub_size_var = tk.StringVar(value="22")
@@ -242,8 +245,32 @@ class PosterApp:
         self._add_row(form, 9, "Altura (mm)", self.height_var)
         self._add_row(form, 10, "DPI (png)", self.dpi_var)
 
+        gradient_frame = ttk.LabelFrame(form, text="Gradiente", padding=10)
+        gradient_frame.grid(row=11, column=0, columnspan=2, sticky=tk.EW, pady=8)
+        gradient_frame.columnconfigure(1, weight=1)
+        ttk.Checkbutton(
+            gradient_frame,
+            text="Aplicar gradiente",
+            variable=self.gradient_enabled_var,
+        ).grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 6))
+        ttk.Label(gradient_frame, text="Percentual (%)").grid(row=1, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(gradient_frame, textvariable=self.gradient_percent_var, width=8).grid(
+            row=1,
+            column=1,
+            sticky=tk.W,
+            pady=4,
+        )
+        ttk.Label(gradient_frame, text="Orientação").grid(row=2, column=0, sticky=tk.W, pady=4)
+        ttk.Combobox(
+            gradient_frame,
+            textvariable=self.gradient_orientation_var,
+            values=["Vertical (topo/base)", "Horizontal (esq/dir)", "Ambos"],
+            state="readonly",
+            width=24,
+        ).grid(row=2, column=1, sticky=tk.W, pady=4)
+
         options = ttk.Frame(form, style="Card.TFrame")
-        options.grid(row=11, column=0, columnspan=2, sticky=tk.W, pady=8)
+        options.grid(row=12, column=0, columnspan=2, sticky=tk.W, pady=8)
         ttk.Checkbutton(options, text="Gerar todos os temas", variable=self.all_themes_var).pack(side=tk.LEFT, padx=(0, 16))
         ttk.Checkbutton(options, text="Atualizar cache", variable=self.refresh_cache_var).pack(side=tk.LEFT, padx=(0, 16))
         ttk.Button(options, text="Listar temas", command=self.show_themes, style="Secondary.TButton").pack(
@@ -402,6 +429,15 @@ class PosterApp:
             raise ValueError("Coordenadas fora do intervalo permitido.")
         return (lat, lon)
 
+    def _get_gradient_orientation(self) -> str:
+        mapping = {
+            "Vertical (topo/base)": "vertical",
+            "Horizontal (esq/dir)": "horizontal",
+            "Ambos": "both",
+        }
+        selection = self.gradient_orientation_var.get()
+        return mapping.get(selection, "vertical")
+
     def log(self, message: str) -> None:
         def append() -> None:
             self.log_text.configure(state=tk.NORMAL)
@@ -433,6 +469,11 @@ class PosterApp:
             "format": self.format_var.get().strip(),
             "all_themes": self.all_themes_var.get(),
             "refresh_cache": self.refresh_cache_var.get(),
+            "gradient": {
+                "enabled": self.gradient_enabled_var.get(),
+                "percent": self.gradient_percent_var.get().strip(),
+                "orientation": self._get_gradient_orientation(),
+            },
             "text_options": {
                 "show_city": self.show_city_var.get(),
                 "show_country": self.show_country_var.get(),
@@ -513,6 +554,19 @@ class PosterApp:
 
         self.all_themes_var.set(bool(config.get("all_themes", False)))
         self.refresh_cache_var.set(bool(config.get("refresh_cache", False)))
+        gradient = config.get("gradient", {})
+        if isinstance(gradient, dict):
+            self.gradient_enabled_var.set(bool(gradient.get("enabled", True)))
+            if "percent" in gradient:
+                self.gradient_percent_var.set(str(gradient.get("percent", "25")))
+            orientation = gradient.get("orientation")
+            orientation_map = {
+                "vertical": "Vertical (topo/base)",
+                "horizontal": "Horizontal (esq/dir)",
+                "both": "Ambos",
+            }
+            if isinstance(orientation, str):
+                self.gradient_orientation_var.set(orientation_map.get(orientation.lower(), "Vertical (topo/base)"))
 
         text_options = config.get("text_options", {})
         if isinstance(text_options, dict):
@@ -600,6 +654,7 @@ class PosterApp:
             height = height_mm / 25.4
             dpi = int(self.dpi_var.get())
             output_format = self.format_var.get()
+            gradient_percent = float(self.gradient_percent_var.get())
 
             themes_to_generate = self.theme_names if self.all_themes_var.get() else [self.theme_var.get()]
             self.log(f"Temas selecionados: {', '.join(themes_to_generate)}")
@@ -642,6 +697,7 @@ class PosterApp:
                     "line_y": float(self.line_y_var.get()),
                     "attr_pos": (float(self.attr_x_var.get()), float(self.attr_y_var.get())),
                 }
+                gradient_orientation = self._get_gradient_orientation()
                 poster_kwargs = {
                     "width": width,
                     "height": height,
@@ -650,6 +706,9 @@ class PosterApp:
                     "name_label": self.name_label_var.get().strip() or None,
                     "refresh_cache": self.refresh_cache_var.get(),
                     "enabled_layers": selected_layers,
+                    "gradient_enabled": self.gradient_enabled_var.get(),
+                    "gradient_percent": gradient_percent,
+                    "gradient_orientation": gradient_orientation,
                 }
                 create_sig = inspect.signature(poster.create_poster)
                 has_kwargs = any(
