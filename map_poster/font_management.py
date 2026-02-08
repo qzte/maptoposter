@@ -12,8 +12,86 @@ from matplotlib.font_manager import FontProperties
 import requests
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-FONTS_DIR = ROOT_DIR /"fonts"
+FONTS_DIR = ROOT_DIR / "fonts"
 FONTS_CACHE_DIR = Path(FONTS_DIR) / "cache"
+LOCAL_FONT_EXTENSIONS = {".ttf", ".otf", ".woff", ".woff2"}
+LOCAL_WEIGHT_TOKENS = {
+    "thin",
+    "extralight",
+    "light",
+    "regular",
+    "book",
+    "medium",
+    "semibold",
+    "bold",
+    "extrabold",
+    "black",
+    "italic",
+    "oblique",
+}
+
+
+def _infer_family_from_filename(filename: str) -> str:
+    base_name = Path(filename).stem
+    parts = re.split(r"[-_ ]+", base_name)
+    if parts and parts[-1].lower() in LOCAL_WEIGHT_TOKENS:
+        parts = parts[:-1]
+    family = " ".join(filter(None, parts)).strip()
+    return family or base_name
+
+
+def _collect_local_fonts() -> dict[str, list[Path]]:
+    families: dict[str, list[Path]] = {}
+    if not FONTS_DIR.exists():
+        return families
+    for path in FONTS_DIR.iterdir():
+        if path.is_dir():
+            continue
+        if path.suffix.lower() not in LOCAL_FONT_EXTENSIONS:
+            continue
+        family = _infer_family_from_filename(path.name)
+        families.setdefault(family, []).append(path)
+    return families
+
+
+def list_local_font_families() -> list[str]:
+    families = _collect_local_fonts()
+    return sorted(families.keys(), key=str.casefold)
+
+
+def _build_font_weight_map(font_files: list[Path]) -> Optional[dict]:
+    weight_map: dict[str, Path] = {}
+    for path in font_files:
+        name = path.stem.lower()
+        if "bold" in name:
+            weight_map.setdefault("bold", path)
+        elif "light" in name:
+            weight_map.setdefault("light", path)
+        elif "regular" in name or "book" in name:
+            weight_map.setdefault("regular", path)
+        else:
+            weight_map.setdefault("regular", path)
+
+    if not weight_map:
+        return None
+    if "regular" not in weight_map:
+        weight_map["regular"] = next(iter(weight_map.values()))
+    if "bold" not in weight_map:
+        weight_map["bold"] = weight_map["regular"]
+    if "light" not in weight_map:
+        weight_map["light"] = weight_map["regular"]
+    return {key: str(path) for key, path in weight_map.items()}
+
+
+def _get_local_font_set(font_family: str) -> Optional[dict]:
+    if not font_family:
+        return None
+    family_lookup = font_family.strip().lower()
+    families = _collect_local_fonts()
+    for family_name, font_files in families.items():
+        if family_name.lower() == family_lookup:
+            return _build_font_weight_map(font_files)
+    return None
 
 def download_google_font(font_family: str, weights: list = None) -> Optional[dict]:
     """
@@ -145,6 +223,12 @@ def load_fonts(font_family: Optional[str] = None) -> Optional[dict]:
     :return: Dict with 'bold', 'regular', 'light' keys mapping to font file paths,
              or None if all loading methods fail
     """
+    if font_family:
+        local_fonts = _get_local_font_set(font_family)
+        if local_fonts:
+            print(f"Using local font family: {font_family}")
+            return local_fonts
+
     # If custom font family specified, try to download from Google Fonts
     if font_family and font_family.lower() != "roboto":
         print(f"Loading Google Font: {font_family}")
