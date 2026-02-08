@@ -849,7 +849,7 @@ class PosterApp:
             self.root.after(0, lambda: messagebox.showinfo("Sucesso", "Pôster(s) gerado(s) com sucesso."))
         except Exception as exc:
             self.log(f"Erro: {exc}")
-            self.root.after(0, lambda: messagebox.showerror("Erro", str(exc)))
+            self.root.after(0, lambda err=exc: messagebox.showerror("Erro", str(err)))
         finally:
             self.root.after(0, lambda: self.generate_button.config(state=tk.NORMAL))
 
