@@ -182,21 +182,9 @@ class PosterApp:
         self.gradient_orientation_var = tk.StringVar(value="Vertical (topo/base)")
         self.poi_enabled_var = tk.BooleanVar(value=False)
         self.poi_location_var = tk.StringVar()
-        self.poi_icon_var = tk.StringVar(value="Círculo")
         self.poi_size_var = tk.StringVar(value="12")
         self.poi_color_var = tk.StringVar(value="#e53935")
         self.poi_svg_path_var = tk.StringVar()
-        self.poi_icon_options = {
-            "Círculo": "o",
-            "Quadrado": "s",
-            "Estrela": "*",
-            "Losango": "D",
-            "Alfinete": "v",
-            "Casa": "⌂",
-            "Coração": r"$\u2665$",
-            "Pin": "P",
-            "X": "X",
-        }
         self.font_family_var = tk.StringVar()
         self.font_main_size_var = tk.StringVar(value="60")
         self.font_sub_size_var = tk.StringVar(value="22")
@@ -411,17 +399,9 @@ class PosterApp:
         ttk.Entry(poi_frame, textvariable=self.poi_location_var, style="Text.TEntry").grid(
             row=1, column=1, sticky=tk.EW, pady=4
         )
-        ttk.Label(poi_frame, text="Ícone").grid(row=2, column=0, sticky=tk.W, pady=4)
-        ttk.Combobox(
-            poi_frame,
-            textvariable=self.poi_icon_var,
-            values=list(self.poi_icon_options.keys()),
-            state="readonly",
-            width=18,
-        ).grid(row=2, column=1, sticky=tk.W, pady=4)
-        ttk.Label(poi_frame, text="SVG do marcador").grid(row=3, column=0, sticky=tk.W, pady=4)
+        ttk.Label(poi_frame, text="SVG do marcador").grid(row=2, column=0, sticky=tk.W, pady=4)
         svg_row = ttk.Frame(poi_frame, style="Card.TFrame")
-        svg_row.grid(row=3, column=1, sticky=tk.EW, pady=4)
+        svg_row.grid(row=2, column=1, sticky=tk.EW, pady=4)
         svg_row.columnconfigure(0, weight=1)
         ttk.Entry(svg_row, textvariable=self.poi_svg_path_var, style="Text.TEntry").grid(
             row=0, column=0, sticky=tk.EW
@@ -429,11 +409,11 @@ class PosterApp:
         ttk.Button(svg_row, text="Selecionar", command=self._select_poi_svg, style="Secondary.TButton").grid(
             row=0, column=1, padx=(6, 0)
         )
-        ttk.Label(poi_frame, text="Tamanho (pt)").grid(row=4, column=0, sticky=tk.W, pady=4)
-        ttk.Entry(poi_frame, textvariable=self.poi_size_var, width=8).grid(row=4, column=1, sticky=tk.W, pady=4)
-        ttk.Label(poi_frame, text="Cor (hex)").grid(row=5, column=0, sticky=tk.W, pady=4)
+        ttk.Label(poi_frame, text="Tamanho (pt)").grid(row=3, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(poi_frame, textvariable=self.poi_size_var, width=8).grid(row=3, column=1, sticky=tk.W, pady=4)
+        ttk.Label(poi_frame, text="Cor (hex)").grid(row=4, column=0, sticky=tk.W, pady=4)
         color_row = ttk.Frame(poi_frame, style="Card.TFrame")
-        color_row.grid(row=5, column=1, sticky=tk.W, pady=4)
+        color_row.grid(row=4, column=1, sticky=tk.W, pady=4)
         ttk.Entry(color_row, textvariable=self.poi_color_var, width=12).pack(side=tk.LEFT)
         self.poi_color_preview = tk.Canvas(color_row, width=22, height=22, highlightthickness=1)
         self.poi_color_preview.pack(side=tk.LEFT, padx=(8, 0))
@@ -592,7 +572,6 @@ class PosterApp:
             "poi": {
                 "enabled": self.poi_enabled_var.get(),
                 "location": self.poi_location_var.get().strip(),
-                "icon": self.poi_icon_var.get().strip(),
                 "svg_path": self.poi_svg_path_var.get().strip(),
                 "size": self.poi_size_var.get().strip(),
                 "color": self.poi_color_var.get().strip(),
@@ -695,9 +674,6 @@ class PosterApp:
         if isinstance(poi, dict):
             self.poi_enabled_var.set(bool(poi.get("enabled", False)))
             self.poi_location_var.set(str(poi.get("location", "")))
-            icon = poi.get("icon")
-            if isinstance(icon, str) and icon in self.poi_icon_options:
-                self.poi_icon_var.set(icon)
             self.poi_svg_path_var.set(str(poi.get("svg_path", "")))
             self.poi_size_var.set(str(poi.get("size", self.poi_size_var.get())))
             self.poi_color_var.set(str(poi.get("color", self.poi_color_var.get())))
@@ -851,7 +827,6 @@ class PosterApp:
                         raise ValueError("O tamanho do ponto de interesse deve ser maior que zero.")
                     poster_kwargs["poi_options"] = {
                         "coords": poi_coords,
-                        "icon": self.poi_icon_var.get(),
                         "svg_path": self.poi_svg_path_var.get().strip(),
                         "size": poi_size,
                         "color": self.poi_color_var.get().strip(),

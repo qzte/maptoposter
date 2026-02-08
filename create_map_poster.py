@@ -50,7 +50,7 @@ def _load_svg_marker(svg_path: str) -> MplPath:
     if size == 0:
         raise ValueError("O caminho do SVG do marcador é inválido.")
     centered = vertices - (min_xy + max_xy) / 2
-    normalized = centered / size
+    normalized = -centered / size
     return MplPath(normalized, mpl_path.codes)
 
 def generate_output_filename(city, theme_name, output_format):
