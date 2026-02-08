@@ -474,7 +474,7 @@ def create_poster(
             "Estrela": "*",
             "Losango": "D",
             "Alfinete": "v",
-            "Casa": r"$\u2302$",
+            "Casa": "⌂",
             "Coração": r"$\u2665$",
             "Pin": "P",
             "X": "X",
