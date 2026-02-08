@@ -123,7 +123,7 @@ def calculate_line_scaling(crop_xlim, crop_ylim, width, dpi, px_per_m_ref):
     return px_per_m_cur / px_per_m_ref
     
 
-def create_poster(city, country, point, dist, output_file, output_format, width=12, height=16, dpi=300, px_per_m_ref=0.096, country_label=None, name_label=None, refresh_cache=False, display_city=None, display_country=None, fonts=None, pad_inches=0.05):
+def create_poster(city, country, point, dist, output_file, output_format, width=12, height=16, dpi=300, px_per_m_ref=0.096, country_label=None, name_label=None, refresh_cache=False, display_city=None, display_country=None, fonts=None, pad_inches=0.05, enabled_layers=None):
     print(f"\nGenerating map for {city}, {country}...")
 
     #value init
@@ -133,19 +133,61 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
 
     # 1. Fetch Street Network and layers
     # Define layers and their specific tags
+    supported_layers = {
+        "roads",
+        "water",
+        "rivers",
+        "oceans",
+        "forests",
+        "green_spaces",
+        "farmland",
+        "railways",
+        "subtram",
+    }
+    enabled_set = None
+    if isinstance(enabled_layers, list):
+        enabled_set = {layer for layer in enabled_layers if isinstance(layer, str)}
+        enabled_set = enabled_set & supported_layers
+    if enabled_set is None:
+        enabled_set = set(supported_layers)
+
     common_args = (point, compensated_dist, refresh_cache)
-    layers = [
-        ("street network",  fetch_graph, {}),
-        ("water",           fetch_features, {"tags": {'natural': ['water', 'bay', 'strait'], 'waterway': ['riverbank', 'dock', 'canal']},"name": 'water'}),
-        ("rivers",          fetch_features, {"tags": {'waterway': ['river']},"name": 'rivers'}),
-        ("coastline",       fetch_features, {"tags": {'natural': 'coastline'},"name": 'coast'}),
-        ("oceans",          fetch_ocean_polygons, {"coastline": lambda results: results.get("coastline")}),
-        ("forests",         fetch_features, {"tags": {"natural":["wood"],"landuse":["forest","logging"]},"name": "forest"}),
-        ("green spaces",    fetch_features, {"tags": {"natural":["grassland"],"landuse":["grass","recreation_ground","religious","village_green","greenery","greenfield","meadow", "vineyard"],"leisure":["park","garden"]},"name": "grass"}),
-        ("farmland",        fetch_features, {"tags": {"landuse":["farmland"],"natural":["heath", "scrub"]},"name": "farmland"}),
-        ("railways",        fetch_features, {"tags": {"railway": ["rail", "narrow_gauge", "monorail", "light_rail"]},"name": "railways"}),
-        ("subtram",         fetch_features, {"tags": {"railway": ["subway", "funicular", "tram"]},"name": "subtram"}),
-    ]
+    layers = [("street network", fetch_graph, {})]
+    if "water" in enabled_set:
+        layers.append(
+            ("water", fetch_features, {"tags": {'natural': ['water', 'bay', 'strait'], 'waterway': ['riverbank', 'dock', 'canal']}, "name": 'water'})
+        )
+    if "rivers" in enabled_set:
+        layers.append(
+            ("rivers", fetch_features, {"tags": {'waterway': ['river']}, "name": 'rivers'})
+        )
+    if "oceans" in enabled_set:
+        layers.append(
+            ("coastline", fetch_features, {"tags": {'natural': 'coastline'}, "name": 'coast'})
+        )
+        layers.append(
+            ("oceans", fetch_ocean_polygons, {"coastline": lambda results: results.get("coastline")})
+        )
+    if "forests" in enabled_set:
+        layers.append(
+            ("forests", fetch_features, {"tags": {"natural": ["wood"], "landuse": ["forest", "logging"]}, "name": "forest"})
+        )
+    if "green_spaces" in enabled_set:
+        layers.append(
+            ("green spaces", fetch_features, {"tags": {"natural": ["grassland"], "landuse": ["grass", "recreation_ground", "religious", "village_green", "greenery", "greenfield", "meadow", "vineyard"], "leisure": ["park", "garden"]}, "name": "grass"})
+        )
+    if "farmland" in enabled_set:
+        layers.append(
+            ("farmland", fetch_features, {"tags": {"landuse": ["farmland"], "natural": ["heath", "scrub"]}, "name": "farmland"})
+        )
+    if "railways" in enabled_set:
+        layers.append(
+            ("railways", fetch_features, {"tags": {"railway": ["rail", "narrow_gauge", "monorail", "light_rail"]}, "name": "railways"})
+        )
+    if "subtram" in enabled_set:
+        layers.append(
+            ("subtram", fetch_features, {"tags": {"railway": ["subway", "funicular", "tram"]}, "name": "subtram"})
+        )
 
     results = {}
     with tqdm(total=len(layers), desc="Map data", ncols=80, bar_format='{desc:30.30} {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}') as pbar:
@@ -159,9 +201,14 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
     G = results["street network"]
     if G is None: raise RuntimeError("Failed to retrieve street network data.")
 
-    water, rivers, oceans = results["water"], results["rivers"], results["oceans"]
-    forests, grass, farmland = results["forests"], results["green spaces"], results["farmland"]
-    railways, subtram = results["railways"], results["subtram"]
+    water = results.get("water")
+    rivers = results.get("rivers")
+    oceans = results.get("oceans")
+    forests = results.get("forests")
+    grass = results.get("green spaces")
+    farmland = results.get("farmland")
+    railways = results.get("railways")
+    subtram = results.get("subtram")
 
     # 2. Setup Plot
     print("Rendering map...")
@@ -188,18 +235,20 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
     print("Adding layers...")
     plot_layers = [
       # (layer_key, layer_data,   allowed_geom_types,                  facecolor / color,                                  linewidth,   zorder)
-        ("ocean",   oceans,       ['Polygon','MultiPolygon'],          THEME['water'],                                     None,        0),
-        ("water",   water,        ['Polygon','MultiPolygon'],          THEME['water'],                                     None,        2),
-        ("river",   rivers,       ['LineString','MultiLineString'],    THEME['water'],                                     2.0,         3),
-        ("forest",  forests,      ['Polygon','MultiPolygon'],          THEME.get('forest', THEME.get('parks')),            None,        1),
-        ("grass",   grass,        ['Polygon','MultiPolygon'],          THEME.get('grass', THEME.get('parks')),             None,        1),
-        ("farmland",farmland,     ['Polygon','MultiPolygon'],          THEME.get('farmland', THEME.get('parks')),          None,        1),
-        ("railway", railways,     ['LineString','MultiLineString'],    THEME.get('railway', THEME.get('road_primary')),    1.0,         6.2),
-        ("subtram", subtram,      ['LineString','MultiLineString'],    THEME.get('subtram', THEME.get('road_primary')),    0.8,         6)
+        ("ocean",   oceans,       ['Polygon','MultiPolygon'],          THEME['water'],                                     None,        0, "oceans"),
+        ("water",   water,        ['Polygon','MultiPolygon'],          THEME['water'],                                     None,        2, "water"),
+        ("river",   rivers,       ['LineString','MultiLineString'],    THEME['water'],                                     2.0,         3, "rivers"),
+        ("forest",  forests,      ['Polygon','MultiPolygon'],          THEME.get('forest', THEME.get('parks')),            None,        1, "forests"),
+        ("grass",   grass,        ['Polygon','MultiPolygon'],          THEME.get('grass', THEME.get('parks')),             None,        1, "green_spaces"),
+        ("farmland",farmland,     ['Polygon','MultiPolygon'],          THEME.get('farmland', THEME.get('parks')),          None,        1, "farmland"),
+        ("railway", railways,     ['LineString','MultiLineString'],    THEME.get('railway', THEME.get('road_primary')),    1.0,         6.2, "railways"),
+        ("subtram", subtram,      ['LineString','MultiLineString'],    THEME.get('subtram', THEME.get('road_primary')),    0.8,         6, "subtram")
     ]
 
     # --- Plot all layers in a loop ---
-    for layer_key, layer_data, geom_types, color, lw, z in plot_layers:
+    for layer_key, layer_data, geom_types, color, lw, z, layer_toggle in plot_layers:
+        if layer_toggle not in enabled_set:
+            continue
         if layer_data is not None and not layer_data.empty:
             filtered = layer_data[layer_data.geometry.type.isin(geom_types)]
             if not filtered.empty:
@@ -221,55 +270,56 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
                         ax.collections[-1].set_capstyle("round")  # Round end of line
 
     # Layer 2: Roads with hierarchy coloring, width, and order
-    print("Applying road hierarchy...")
-    edges = ox.graph_to_gdfs(G_proj, nodes=False, edges=True)    # Convert graph edges to GeoDataFrame
+    if "roads" in enabled_set:
+        print("Applying road hierarchy...")
+        edges = ox.graph_to_gdfs(G_proj, nodes=False, edges=True)    # Convert graph edges to GeoDataFrame
 
-    # Normalize highway values (take first element if list, fallback to 'unclassified')
-    edges["highway_norm"] = edges["highway"].apply(lambda h: (h[0] if isinstance(h, list) and h else h) or 'unclassified')
+        # Normalize highway values (take first element if list, fallback to 'unclassified')
+        edges["highway_norm"] = edges["highway"].apply(lambda h: (h[0] if isinstance(h, list) and h else h) or 'unclassified')
 
-    # Define a road style library
-    ROAD_STYLES = {
-        'path':           {'order': 0, 'theme_key': 'road_track', 'width': 0.1},
-        'track':          {'order': 0, 'theme_key': 'road_track', 'width': 0.1},
-        'pedestrian':     {'order': 0, 'theme_key': 'road_track', 'width': 0.1},
-        "footway":        {'order': 0, 'theme_key': 'road_track', 'width': 0.1},
-        "cycleway":       {'order': 0, 'theme_key': 'road_track', 'width': 0.1},
-        'service':        {'order': 1, 'theme_key': 'road_service', 'width': 0.4},
-        'residential':    {'order': 2, 'theme_key': 'road_residential', 'width': 0.4},
-        'living_street':  {'order': 2, 'theme_key': 'road_residential', 'width': 0.4},
-        'unclassified':   {'order': 2, 'theme_key': 'road_residential', 'width': 0.4},
-        'tertiary':       {'order': 3, 'theme_key': 'road_tertiary', 'width': 0.6},
-        'tertiary_link':  {'order': 3, 'theme_key': 'road_tertiary', 'width': 0.6},
-        'secondary':      {'order': 4, 'theme_key': 'road_secondary', 'width': 0.8},
-        'secondary_link': {'order': 4, 'theme_key': 'road_secondary', 'width': 0.8},
-        'primary':        {'order': 5, 'theme_key': 'road_primary', 'width': 1.0},
-        'primary_link':   {'order': 5, 'theme_key': 'road_primary', 'width': 1.0},
-        'trunk':          {'order': 6, 'theme_key': 'road_primary', 'width': 1.0},
-        'trunk_link':     {'order': 6, 'theme_key': 'road_primary', 'width': 1.0},
-        'motorway':       {'order': 7, 'theme_key': 'road_motorway', 'width': 1.2},
-        'motorway_link':  {'order': 7, 'theme_key': 'road_motorway', 'width': 1.2},
-    }
+        # Define a road style library
+        ROAD_STYLES = {
+            'path':           {'order': 0, 'theme_key': 'road_track', 'width': 0.1},
+            'track':          {'order': 0, 'theme_key': 'road_track', 'width': 0.1},
+            'pedestrian':     {'order': 0, 'theme_key': 'road_track', 'width': 0.1},
+            "footway":        {'order': 0, 'theme_key': 'road_track', 'width': 0.1},
+            "cycleway":       {'order': 0, 'theme_key': 'road_track', 'width': 0.1},
+            'service':        {'order': 1, 'theme_key': 'road_service', 'width': 0.4},
+            'residential':    {'order': 2, 'theme_key': 'road_residential', 'width': 0.4},
+            'living_street':  {'order': 2, 'theme_key': 'road_residential', 'width': 0.4},
+            'unclassified':   {'order': 2, 'theme_key': 'road_residential', 'width': 0.4},
+            'tertiary':       {'order': 3, 'theme_key': 'road_tertiary', 'width': 0.6},
+            'tertiary_link':  {'order': 3, 'theme_key': 'road_tertiary', 'width': 0.6},
+            'secondary':      {'order': 4, 'theme_key': 'road_secondary', 'width': 0.8},
+            'secondary_link': {'order': 4, 'theme_key': 'road_secondary', 'width': 0.8},
+            'primary':        {'order': 5, 'theme_key': 'road_primary', 'width': 1.0},
+            'primary_link':   {'order': 5, 'theme_key': 'road_primary', 'width': 1.0},
+            'trunk':          {'order': 6, 'theme_key': 'road_primary', 'width': 1.0},
+            'trunk_link':     {'order': 6, 'theme_key': 'road_primary', 'width': 1.0},
+            'motorway':       {'order': 7, 'theme_key': 'road_motorway', 'width': 1.2},
+            'motorway_link':  {'order': 7, 'theme_key': 'road_motorway', 'width': 1.2},
+        }
 
-    # Apply styles to edges
-    edges["style"] = edges["highway_norm"].map(lambda h: ROAD_STYLES.get(h))
-    edges["draw_order"] = edges["style"].map(lambda s: s["order"] if s else 1)
-    edges["width"]      = edges["style"].map(lambda s: s["width"] if s else 0.4)
-    edges["theme_key"]  = edges["style"].map(lambda s: s["theme_key"] if s else "road_default")
-    edges["color"]      = edges["theme_key"].map(lambda k: THEME.get(k, THEME["road_default"]))
+        # Apply styles to edges
+        edges["style"] = edges["highway_norm"].map(lambda h: ROAD_STYLES.get(h))
+        edges["draw_order"] = edges["style"].map(lambda s: s["order"] if s else 1)
+        edges["width"]      = edges["style"].map(lambda s: s["width"] if s else 0.4)
+        edges["theme_key"]  = edges["style"].map(lambda s: s["theme_key"] if s else "road_default")
+        edges["color"]      = edges["theme_key"].map(lambda k: THEME.get(k, THEME["road_default"]))
 
-    # Draw roads per hierarchy level
-    for order in sorted(edges["draw_order"].unique()):
-        subset = edges[edges["draw_order"] == order]
+        # Draw roads per hierarchy level
+        for order in sorted(edges["draw_order"].unique()):
+            subset = edges[edges["draw_order"] == order]
 
-        # Base pass
-        subset.plot(ax=ax,color=subset["color"],linewidth=subset["width"] * line_scale_factor,zorder=5 + order * 0.01)
-        ax.collections[-1].set_capstyle("round")
-
-        # Extra core line if defined in THEME
-        core_key = f"{subset.iloc[0]['theme_key']}_core"
-        if core_key in THEME:
-            subset.plot(ax=ax,color=THEME[core_key],linewidth= 0.3 * subset["width"] * line_scale_factor,zorder=5 + order * 0.01 + 0.005, alpha = 0.9) #add core lines in between defined road order
+            # Base pass
+            subset.plot(ax=ax, color=subset["color"], linewidth=subset["width"] * line_scale_factor, zorder=5 + order * 0.01)
             ax.collections[-1].set_capstyle("round")
+
+            # Extra core line if defined in THEME
+            core_key = f"{subset.iloc[0]['theme_key']}_core"
+            if core_key in THEME:
+                subset.plot(ax=ax, color=THEME[core_key], linewidth=0.3 * subset["width"] * line_scale_factor, zorder=5 + order * 0.01 + 0.005, alpha=0.9) #add core lines in between defined road order
+                ax.collections[-1].set_capstyle("round")
 
     # Layer 3: Gradients (Top and Bottom)
     create_gradient_fade(ax, THEME['gradient_color'], location='bottom', zorder=10)
