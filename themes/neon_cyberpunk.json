@@ -9,6 +9,7 @@
   "forest": "#151525",
   "grass": "#151525",
   "farmland": "#151525",
+  "zoning": "#212142",
   "road_motorway": "#FF00FF",
   "road_motorway_core": "#FFEEFF",
   "road_primary": "#00FFFF",
@@ -23,5 +24,7 @@
   "railway_core": "#FFEBF9",
   "subtram": "#BB37EA",
   "subtram_core": "#E5D6EA",
-  "road_default": "#0098A0"
+  "road_default": "#0098A0",
+  "building": "#5353A8",
+  "building_outline": "#B1B0FF"
 }

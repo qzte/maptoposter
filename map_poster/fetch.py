@@ -158,3 +158,61 @@ def get_coordinates(city, country, refresh_cache):
         return (location.latitude, location.longitude)
     else:
         raise ValueError(f"Could not find coordinates for {city}, {country}")
+    
+def convert_linewidth_to_poly(gdf):
+    """
+    Convert lines with width into as polygons, ie used for runways, if polygons in input, return them untouched
+    Returns:
+    - polygons (ie aeroway aprons (untouched) + converted runways)
+    - lines (ie taxiways + runways without width parameter)
+
+    Output CRS: EPSG:4326 (same as other layers)
+    """
+
+    if gdf is None or gdf.empty:
+        return None, None
+
+    # Ensure CRS exists
+    if gdf.crs is None:
+        gdf = gdf.set_crs("EPSG:4326")
+
+    # Temporary metric projection for buffering
+    projected = ox.projection.project_gdf(gdf)
+
+    poly_rows = []
+    line_rows = []
+
+    for _, row in projected.iterrows():
+        geom = row.geometry
+        if geom is None:
+            continue
+        # preexisting polygons
+        if geom.geom_type in ["Polygon", "MultiPolygon"]:
+            poly_rows.append(row)
+            continue
+
+        # lines
+        width_val = row.get('width', None)
+        if width_val is not None:    # If line have width info
+            try:
+                width_m = float(str(width_val).replace("m", "").strip())
+                buffered = geom.buffer(width_m / 2, cap_style=2)
+                row.geometry = buffered
+                poly_rows.append(row)
+            except Exception:
+                line_rows.append(row)
+        else:                       # If line don't have width info
+            line_rows.append(row)
+
+    poly_gdf = None
+    line_gdf = None
+
+    if poly_rows:
+        poly_gdf = gpd.GeoDataFrame(poly_rows, crs=projected.crs)
+        poly_gdf = poly_gdf.to_crs("EPSG:4326")  # Convert to lat/lon
+
+    if line_rows:
+        line_gdf = gpd.GeoDataFrame(line_rows, crs=projected.crs)
+        line_gdf = line_gdf.to_crs("EPSG:4326")  # Convert back to lat/lon
+
+    return poly_gdf, line_gdf
