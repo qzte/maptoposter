@@ -126,3 +126,22 @@ def ensure_water_polygons(data_dir):
                 dst.write(src.read())
     
     return shp_path
+
+def resolve_layer_order(layers):
+    resolved = []
+    unresolved = list(layers.keys())  # keep original order
+
+    while unresolved:
+        progress = False
+
+        for name in unresolved[:]:  # iterate over copy
+            deps = layers[name].get("depends_on", [])
+            if all(dep in resolved for dep in deps):
+                resolved.append(name)
+                unresolved.remove(name)
+                progress = True
+
+        if not progress:
+            raise RuntimeError("Circular or missing layer dependency detected")
+
+    return resolved

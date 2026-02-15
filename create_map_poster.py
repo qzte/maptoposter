@@ -15,12 +15,32 @@ from map_poster.theme_management import load_theme
 from map_poster.fetch import fetch_features, fetch_graph, fetch_ocean_polygons, get_coordinates, convert_linewidth_to_poly
 from pathlib import Path
 from lat_lon_parser import parse
-from matplotlib.collections import LineCollection
+import geopandas as gpd
+import networkx as nx
+import toml
 
 POSTERS_DIR = "posters"
 WATER_POLY_DIR = Path("cache/water_polygons")
 
-THEME = dict[str, str]()  # Will be loaded later
+THEME = dict[str, str]()
+
+CONFIG_FILE = "poster_config.toml"
+config = toml.load(CONFIG_FILE)
+# Transform flattened 'tags_*' into nested 'tags' dict
+for layer_name, layer_conf in config.get("layers", {}).items():
+    tags = {}
+    for key, value in list(layer_conf.items()):  # list() to allow modification during iteration
+        if key.startswith("tags_") and value is not None:
+            tag_key = key[5:]  # remove 'tags_' prefix
+            tags[tag_key] = value
+            del layer_conf[key]  # remove flattened key
+    if tags:
+        layer_conf["tags"] = tags
+
+
+DEFAULTS = config["defaults"]
+LAYERS = config["layers"]
+ROAD_STYLES = config["road_styles"]
 
 def generate_output_filename(city, country, theme_name, output_format):
     """
@@ -133,48 +153,41 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
 
     # 1. Fetch Street Network and layers
     # Define layers and their specific tags
-    common_args = (point, compensated_dist, refresh_cache)
-    layers = [
-        ("street network",  fetch_graph, {}),
-        ("water",           fetch_features, {"tags": {'natural': ['water', 'bay', 'strait'], 'waterway': ['riverbank', 'dock', 'canal']},"name": 'water'}),
-        ("wetland",         fetch_features, {"tags": {'natural': ['wetland'], 'wetland': ['marsh', 'bog', 'reedbed', 'swamp']},"name": 'wetland'}),
-        ("rivers",          fetch_features, {"tags": {'waterway': ['river']},"name": 'rivers'}),
-        ("coastline",       fetch_features, {"tags": {'natural': 'coastline'},"name": 'coast'}),
-        ("oceans",          fetch_ocean_polygons, {"coastline": lambda results: results.get("coastline")}),
-        ("sand",            fetch_features, {"tags": {"natural":["beach", "shoal", "sand", "desert", "dune"]},"name": "sand"}),
-        ("forests",         fetch_features, {"tags": {"natural":["wood"],"landuse":["forest","logging","orchard"]},"name": "forest"}),
-        ("green spaces",    fetch_features, {"tags": {"natural":["grassland"],"landuse":["grass","recreation_ground","religious","village_green","greenery","greenfield","meadow", "vineyard", "cemetery"],"leisure":["park","garden"]},"name": "grass"}),
-        ("farmland",        fetch_features, {"tags": {"landuse":["farmland", "allotments"],"natural":["heath", "scrub"]},"name": "farmland"}),
-        ("rocky",           fetch_features, {"tags": {"landuse":["quarry", "landfill", "construction"], "natural":["bare_rock","scree", "shingle", "rock", "stone"]},"name": "rocky"}),
-        ("zoning",          fetch_features, {"tags": {"landuse":["residential", "industrial", "commercial", "brownfield"]},"name": "zoning"}),
-        ("railways",        fetch_features, {"tags": {"railway": ["rail", "narrow_gauge", "monorail", "light_rail"]},"name": "railways"}),
-        ("subtram",         fetch_features, {"tags": {"railway": ["subway", "funicular", "tram"]},"name": "subtram"}),
-        ("aeroway",         fetch_features, {"tags": {"aeroway": ["runway", "taxiway", "apron"]},"name": "aeroway"}),
-        ("buildings",       fetch_features, {"tags": {"building": True},"name": "buildings"}),
-    ]
 
     results = {}
-    with tqdm(total=len(layers), desc="Map data", ncols=80, bar_format='{desc:30.30} {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}') as pbar:
-        for name, func, extra_kwargs in layers:
-            pbar.set_description(f"Downloading {name}")
-            # Evaluate dynamic kwargs if they are lambdas
-            kwargs = {k: v(results) if callable(v) else v for k, v in extra_kwargs.items()}
-            results[name] = func(*common_args, **kwargs)
+    with tqdm(total=len(LAYERS), desc="Map data", ncols=80, bar_format='{desc:30.30} {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}') as pbar:
+        ordered_layers = map_poster.cli.resolve_layer_order(LAYERS)     #Ensure layers are fetched in a safe order
+        for layer_name in ordered_layers:
+            layer_conf = LAYERS[layer_name]
+            pbar.set_description(f"Downloading {layer_name}")
+            fetch_func = globals()[layer_conf["fetch_func"]]  # fetch_features / fetch_graph / fetch_ocean_polygons
+
+            # Only fetch_features needs tags + name
+            if fetch_func == fetch_features:
+                tags = layer_conf.get("tags", {})
+                results[layer_name] = fetch_func(point, compensated_dist, refresh_cache, tags=tags, name=layer_name)
+            elif fetch_func == fetch_ocean_polygons:
+                # some layers like oceans may want dynamic kwargs
+                coastline = results.get("coastline")
+                results[layer_name] = fetch_func(point,compensated_dist,refresh_cache,coastline=coastline)
+
+            else:  # fetch_graph
+                results[layer_name] = fetch_func(point, compensated_dist, refresh_cache)
+
             pbar.update(1)
 
-    G = results["street network"]
+    G = results["street_network"]
     if G is None: raise RuntimeError("Failed to retrieve street network data.")
 
-    water, rivers, oceans = results["water"], results["rivers"], results["oceans"]
-    wetland, sand = results["wetland"], results["sand"]
-    forests, grass, farmland, rocky = results["forests"], results["green spaces"], results["farmland"], results["rocky"]
-    zoning = results["zoning"]
-    railways, subtram = results["railways"], results["subtram"]
-    buildings = results["buildings"]
-    aeroway = results["aeroway"]
+    # Handle aeroway data
+    aeroway = results.pop("aeroway", None)
+    if aeroway is not None:
+        polygons, lines = convert_linewidth_to_poly(aeroway)
+        conf = LAYERS.pop("aeroway", {})
 
-    # Preprocess aeroway data (convert line width info to polygons, important for runways)
-    aeroway_polygons, aeroway_lines = convert_linewidth_to_poly(aeroway)
+        for suffix, data in {"aeroway_polygons": polygons, "aeroway_lines": lines,}.items():
+            LAYERS[suffix] = {**conf}
+            results[suffix] = data
 
     # 2. Setup Plot
     print("Rendering map...")
@@ -199,47 +212,35 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
     # Layer 1: Polygons (filter to only plot polygon/multipolygon geometries, not points)
     # --- Layer definitions for plotting ---
     print("Adding layers...")
-    plot_layers = [
-      # (layer_key,         layer_data,         allowed_geom_types,                  facecolor / color,                                  linewidth,   zorder,   alpha)
-        ("ocean",           oceans,             ['Polygon','MultiPolygon'],          THEME['water'],                                     None,        0,        1),
-        ("water",           water,              ['Polygon','MultiPolygon'],          THEME['water'],                                     None,        2,        1),
-        ("river",           rivers,             ['LineString','MultiLineString'],    THEME['water'],                                     2.0,         3,        1),
-        ("wetland",         wetland,            ['Polygon','MultiPolygon'],          THEME.get('wetland', THEME.get('water')),           None,        2,        1),
-        ("sand",            sand,               ['Polygon','MultiPolygon'],          THEME.get('sand', THEME.get('bg')),                 None,        2,        1),
-        ("forest",          forests,            ['Polygon','MultiPolygon'],          THEME.get('forest', THEME.get('parks')),            None,        1,        1),
-        ("grass",           grass,              ['Polygon','MultiPolygon'],          THEME.get('grass', THEME.get('parks')),             None,        1,        1),
-        ("farmland",        farmland,           ['Polygon','MultiPolygon'],          THEME.get('farmland', THEME.get('parks')),          None,        1,        1),
-        ("rocky",           rocky,              ['Polygon','MultiPolygon'],          THEME.get('rocky', THEME.get('bg')),                None,        1,        1),
-        ("zoning",          zoning,             ['Polygon','MultiPolygon'],          THEME.get('zoning', THEME.get('bg')),               None,        0,        1),
-        ("railway",         railways,           ['LineString','MultiLineString'],    THEME.get('railway', THEME.get('road_primary')),    1.0,         6.2,      0.7),
-        ("subtram",         subtram,            ['LineString','MultiLineString'],    THEME.get('subtram', THEME.get('road_primary')),    0.8,         6,        0.7),
-        ("aeroway_poly",    aeroway_polygons,   ['Polygon','MultiPolygon'],          THEME['road_primary'],                              None,        3.5,      1),
-        ("aeroway_line",    aeroway_lines,      ['LineString','MultiLineString'],    THEME['road_primary'],                              0.6,         3.5,      1),
-        ("buildings",       buildings,          ['Polygon','MultiPolygon'],          THEME.get('building', THEME.get('bg')),             None,        4,        0.5),
-    ]
 
     # --- Plot all layers in a loop ---
-    for layer_key, layer_data, geom_types, color, lw, z, alpha in plot_layers:
-        if layer_data is not None and not layer_data.empty:
-            filtered = layer_data[layer_data.geometry.type.isin(geom_types)]
-            if not filtered.empty:
-                try:
-                    projected = ox.projection.project_gdf(filtered)
-                except Exception:
-                    projected = filtered.to_crs(G_proj.graph['crs'])
+    for layer_name, layer_conf in LAYERS.items():
+        layer_data = results.get(layer_name)
+        if layer_data is None or (isinstance(layer_data, gpd.GeoDataFrame) and layer_data.empty) or isinstance(layer_data, nx.MultiDiGraph):
+            continue  # skip plotting here; ie roads handled separately
+        filtered = layer_data[layer_data.geometry.type.isin(['Polygon','MultiPolygon','LineString','MultiLineString'])]  # Used to filter out points
+        if filtered.empty:
+            continue
 
-                # Plot
-                if 'Polygon' in geom_types or 'MultiPolygon' in geom_types:
-                    #projected.plot(ax=ax, facecolor=color, edgecolor='none', zorder=z)
-                    projected.plot(ax=ax, facecolor=color, linewidth=0.1 * line_scale_factor, edgecolor=THEME.get('building_outline', THEME.get('bg')) if layer_key == "buildings" else "none", zorder=z, alpha=alpha)
-                else:  # Lines
-                    projected.plot(ax=ax, color=color, linewidth=lw*line_scale_factor, zorder=z, alpha=alpha)
-                    ax.collections[-1].set_capstyle("round")  # Round end of line
-                    core_key = f"{layer_key}_core"
-                    if core_key in THEME:
-                        # Extra extra core line (good for adding a "glowing effect")
-                        projected.plot(ax=ax, color=THEME[core_key], linewidth=0.2*line_scale_factor, zorder=z+0.1, alpha=alpha)
-                        ax.collections[-1].set_capstyle("round")  # Round end of line
+        try:
+            projected = ox.projection.project_gdf(filtered)
+        except Exception:
+            projected = filtered.to_crs(G_proj.graph['crs'])
+
+        color = THEME.get(layer_conf.get("color_theme_key")) or THEME.get(layer_conf.get("fallback_keys")) or THEME.get("bg")
+        lw = layer_conf.get("linewidth", 0)
+        z = layer_conf.get("zorder", 1)
+        alpha = layer_conf.get("alpha", 1)
+
+        if projected.geometry.type.isin(['Polygon','MultiPolygon']).any():
+            projected.plot(ax=ax, facecolor=color, linewidth=lw*line_scale_factor, edgecolor=THEME.get(layer_conf.get("outline",""), "none"), zorder=z, alpha=alpha)
+        else:
+            projected.plot(ax=ax, color=color, linewidth=lw*line_scale_factor, zorder=z, alpha=alpha)
+            ax.collections[-1].set_capstyle("round")
+            core_key = f"{layer_conf['color_theme_key']}_core"
+            if core_key in THEME:
+                projected.plot(ax=ax, color=THEME[core_key], linewidth=0.2*line_scale_factor, zorder=z+0.1, alpha=alpha)
+                ax.collections[-1].set_capstyle("round")
 
     # Layer 2: Roads with hierarchy coloring, width, and order
     print("Applying road hierarchy...")
@@ -248,34 +249,11 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
     # Normalize highway values (take first element if list, fallback to 'unclassified')
     edges["highway_norm"] = edges["highway"].apply(lambda h: (h[0] if isinstance(h, list) and h else h) or 'unclassified')
 
-    # Define a road style library
-    ROAD_STYLES = {
-        'path':           {'order': 0, 'theme_key': 'road_track',       'width': 0.1},
-        'track':          {'order': 0, 'theme_key': 'road_track',       'width': 0.1},
-        'pedestrian':     {'order': 0, 'theme_key': 'road_track',       'width': 0.1},
-        "footway":        {'order': 0, 'theme_key': 'road_track',       'width': 0.1},
-        "cycleway":       {'order': 0, 'theme_key': 'road_track',       'width': 0.1},
-        'service':        {'order': 1, 'theme_key': 'road_service',     'width': 0.4},
-        'residential':    {'order': 2, 'theme_key': 'road_residential', 'width': 0.4},
-        'living_street':  {'order': 2, 'theme_key': 'road_residential', 'width': 0.4},
-        'unclassified':   {'order': 2, 'theme_key': 'road_residential', 'width': 0.4},
-        'tertiary':       {'order': 3, 'theme_key': 'road_tertiary',    'width': 0.6},
-        'tertiary_link':  {'order': 3, 'theme_key': 'road_tertiary',    'width': 0.6},
-        'secondary':      {'order': 4, 'theme_key': 'road_secondary',   'width': 0.8},
-        'secondary_link': {'order': 4, 'theme_key': 'road_secondary',   'width': 0.8},
-        'primary':        {'order': 5, 'theme_key': 'road_primary',     'width': 1.0},
-        'primary_link':   {'order': 5, 'theme_key': 'road_primary',     'width': 1.0},
-        'trunk':          {'order': 6, 'theme_key': 'road_primary',     'width': 1.0},
-        'trunk_link':     {'order': 6, 'theme_key': 'road_primary',     'width': 1.0},
-        'motorway':       {'order': 7, 'theme_key': 'road_motorway',    'width': 1.2},
-        'motorway_link':  {'order': 7, 'theme_key': 'road_motorway',    'width': 1.2},
-    }
-
     # Apply styles to edges
-    edges["style"] = edges["highway_norm"].map(lambda h: ROAD_STYLES.get(h))
-    edges["draw_order"] = edges["style"].map(lambda s: s["order"] if s else 1)
-    edges["width"]      = edges["style"].map(lambda s: s["width"] if s else 0.4)
-    edges["theme_key"]  = edges["style"].map(lambda s: s["theme_key"] if s else "road_default")
+    edges["style"]      = edges["highway_norm"].map(lambda h: ROAD_STYLES.get(h, {'order':1,'theme_key':'road_default','width':0.4}))
+    edges["draw_order"] = edges["style"].map(lambda s: s["order"])
+    edges["width"]      = edges["style"].map(lambda s: s["width"])
+    edges["theme_key"]  = edges["style"].map(lambda s: s["theme_key"])
     edges["color"]      = edges["theme_key"].map(lambda k: THEME.get(k, THEME["road_default"]))
 
     # Draw roads per hierarchy level
