@@ -856,16 +856,20 @@ class PosterApp:
                     poi_size = float(self.poi_size_var.get())
                     if poi_size <= 0:
                         raise ValueError("O tamanho do ponto de interesse deve ser maior que zero.")
-                    poster_kwargs["poi_options"] = {
-                        "coords": poi_coords,
-                        "svg_path": self.poi_svg_path_var.get().strip(),
-                        "size": poi_size,
-                        "color": self.poi_color_var.get().strip(),
-                    }
                 create_sig = inspect.signature(poster.create_poster)
                 has_kwargs = any(
                     param.kind == inspect.Parameter.VAR_KEYWORD for param in create_sig.parameters.values()
                 )
+                if self.poi_enabled_var.get():
+                    if "poi_options" in create_sig.parameters or has_kwargs:
+                        poster_kwargs["poi_options"] = {
+                            "coords": poi_coords,
+                            "svg_path": self.poi_svg_path_var.get().strip(),
+                            "size": poi_size,
+                            "color": self.poi_color_var.get().strip(),
+                        }
+                    else:
+                        self.log("Aviso: esta versão do gerador não suporta ponto de interesse na GUI.")
                 if "road_types" in create_sig.parameters or has_kwargs:
                     poster_kwargs["road_types"] = selected_road_types
                 elif selected_road_types:
