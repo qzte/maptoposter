@@ -201,6 +201,19 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
     if selected_layers:
         selected_layers.add("street_network")
 
+        # Include prerequisite layers required by selected layers.
+        # Example: ocean polygons require coastline geometries.
+        layer_dependencies = {
+            "ocean": {"coastline"},
+        }
+        pending = list(selected_layers)
+        while pending:
+            layer = pending.pop()
+            for dependency in layer_dependencies.get(layer, set()):
+                if dependency not in selected_layers:
+                    selected_layers.add(dependency)
+                    pending.append(dependency)
+
     with tqdm(total=len(LAYERS), desc="Map data", ncols=80, bar_format='{desc:30.30} {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}') as pbar:
         ordered_layers = map_poster.cli.resolve_layer_order(LAYERS)     #Ensure layers are fetched in a safe order
         for layer_name in ordered_layers:

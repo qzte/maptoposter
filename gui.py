@@ -215,7 +215,7 @@ class PosterApp:
             ("roads", "Ruas (hierarquia)", True),
             ("water", "Água (lagos/mar)", True),
             ("rivers", "Rios", True),
-            ("oceans", "Oceanos", True),
+            ("ocean", "Oceanos", True),
             ("forests", "Florestas", True),
             ("green_spaces", "Áreas verdes", True),
             ("farmland", "Áreas agrícolas", True),
@@ -724,7 +724,13 @@ class PosterApp:
 
         enabled_layers = config.get("enabled_layers")
         if isinstance(enabled_layers, list):
-            enabled_set = {layer for layer in enabled_layers if isinstance(layer, str)}
+            # Backward compatibility: older GUI builds persisted "oceans",
+            # while the render pipeline expects the singular "ocean" key.
+            enabled_set = {
+                ("ocean" if layer == "oceans" else layer)
+                for layer in enabled_layers
+                if isinstance(layer, str)
+            }
             for key, _, _ in self.layer_options:
                 self.layer_vars[key].set(key in enabled_set)
 
