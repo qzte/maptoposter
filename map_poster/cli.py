@@ -21,6 +21,9 @@ def resolve_layer_order(layers):
     # Ensure dependent layers are fetched after their prerequisites.
     dependency_pairs = [
         ("ocean", "coastline"),
+        ("ocean", "coastlines"),
+        ("oceans", "coastline"),
+        ("oceans", "coastlines"),
     ]
 
     for layer, prerequisite in dependency_pairs:

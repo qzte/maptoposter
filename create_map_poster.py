@@ -199,7 +199,38 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
     results = {}
     selected_layers = set(enabled_layers or [])
     if selected_layers:
+        # Normalize known aliases against configured layer keys.
+        layer_aliases = {
+            "oceans": "ocean",
+            "ocean": "oceans",
+        }
+        normalized_layers = set()
+        for layer in selected_layers:
+            if layer in LAYERS:
+                normalized_layers.add(layer)
+                continue
+            alias = layer_aliases.get(layer)
+            if alias and alias in LAYERS:
+                normalized_layers.add(alias)
+                continue
+            normalized_layers.add(layer)
+        selected_layers = normalized_layers
+
         selected_layers.add("street_network")
+
+        # Include prerequisite layers required by selected layers.
+        # Example: ocean polygons require coastline geometries.
+        layer_dependencies = {
+            "ocean": {"coastline", "coastlines"},
+            "oceans": {"coastline", "coastlines"},
+        }
+        pending = list(selected_layers)
+        while pending:
+            layer = pending.pop()
+            for dependency in layer_dependencies.get(layer, set()):
+                if dependency in LAYERS and dependency not in selected_layers:
+                    selected_layers.add(dependency)
+                    pending.append(dependency)
 
     with tqdm(total=len(LAYERS), desc="Map data", ncols=80, bar_format='{desc:30.30} {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}') as pbar:
         ordered_layers = map_poster.cli.resolve_layer_order(LAYERS)     #Ensure layers are fetched in a safe order
@@ -217,7 +248,7 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
                 results[layer_name] = fetch_func(point, compensated_dist, refresh_cache, tags=tags, name=layer_name)
             elif fetch_func == fetch_ocean_polygons:
                 # some layers like oceans may want dynamic kwargs
-                coastline = results.get("coastline")
+                coastline = results.get("coastline") or results.get("coastlines")
                 results[layer_name] = fetch_func(point,compensated_dist,refresh_cache,coastline=coastline)
 
             else:  # fetch_graph
