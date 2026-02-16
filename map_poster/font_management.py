@@ -7,7 +7,11 @@ import os
 import re
 from pathlib import Path
 from typing import Optional
-from matplotlib.font_manager import FontProperties
+
+try:
+    from matplotlib.font_manager import FontProperties
+except ModuleNotFoundError:
+    FontProperties = None
 
 import requests
 
@@ -29,6 +33,14 @@ LOCAL_WEIGHT_TOKENS = {
     "italic",
     "oblique",
 }
+
+
+def _require_font_properties() -> None:
+    if FontProperties is None:
+        raise ModuleNotFoundError(
+            "No module named 'matplotlib'. Install dependencies with "
+            "`pip install -r requirements.txt`."
+        )
 
 
 def _infer_family_from_filename(filename: str) -> str:
@@ -329,6 +341,7 @@ def add_text(
     fonts=None,
     text_options=None,
 ):
+    _require_font_properties()
     text_options = text_options or {}
     display_city = _decode_unicode_escapes(display_city)
     display_country = _decode_unicode_escapes(display_country)
@@ -408,6 +421,7 @@ def add_text(
     
 def add_attribution(ax, THEME, zorder=11, text_options=None):
     # --- ATTRIBUTION (bottom right) ---
+    _require_font_properties()
     text_options = text_options or {}
     if not text_options.get("show_attribution", True):
         return
