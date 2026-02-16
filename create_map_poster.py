@@ -223,12 +223,14 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
         layer_dependencies = {
             "ocean": {"coastline", "coastlines"},
             "oceans": {"coastline", "coastlines"},
+            "ocean": {"coastline"},
         }
         pending = list(selected_layers)
         while pending:
             layer = pending.pop()
             for dependency in layer_dependencies.get(layer, set()):
                 if dependency in LAYERS and dependency not in selected_layers:
+                if dependency not in selected_layers:
                     selected_layers.add(dependency)
                     pending.append(dependency)
 
