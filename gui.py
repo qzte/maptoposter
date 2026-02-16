@@ -6,7 +6,13 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
-import create_map_poster as poster
+try:
+    import create_map_poster as poster
+    POSTER_IMPORT_ERROR: ModuleNotFoundError | None = None
+except ModuleNotFoundError as exc:
+    poster = None
+    POSTER_IMPORT_ERROR = exc
+
 from lat_lon_parser import parse
 from map_poster.font_management import list_local_font_families
 from map_poster.theme_management import get_available_themes, load_theme
@@ -731,8 +737,24 @@ class PosterApp:
         self.log(f"Configuração carregada de: {file_path}")
         messagebox.showinfo("Configuração carregada", "Configuração carregada com sucesso.")
 
+
+    def _ensure_poster_module(self) -> bool:
+        if poster is not None:
+            return True
+
+        missing = POSTER_IMPORT_ERROR.name if POSTER_IMPORT_ERROR else "dependência desconhecida"
+        message = (
+            f"Não foi possível carregar o gerador de pôsteres porque a dependência '{missing}' "
+            "não está instalada. Execute: pip install -r requirements.txt"
+        )
+        self.log(message)
+        messagebox.showerror("Dependência em falta", message)
+        return False
+
     def start_generation(self) -> None:
         if self.generate_button["state"] == tk.DISABLED:
+            return
+        if not self._ensure_poster_module():
             return
 
         self.generate_button.config(state=tk.DISABLED)
