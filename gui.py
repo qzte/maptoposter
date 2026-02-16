@@ -13,7 +13,10 @@ except ModuleNotFoundError as exc:
     poster = None
     POSTER_IMPORT_ERROR = exc
 
-from lat_lon_parser import parse
+try:
+    from lat_lon_parser import parse
+except ModuleNotFoundError:
+    from map_poster.coordinates import parse_coordinate as parse
 from map_poster.font_management import list_local_font_families
 from map_poster.theme_management import get_available_themes, load_theme
 
