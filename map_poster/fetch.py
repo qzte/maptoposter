@@ -158,3 +158,55 @@ def get_coordinates(city, country, refresh_cache):
         return (location.latitude, location.longitude)
     else:
         raise ValueError(f"Could not find coordinates for {city}, {country}")
+
+def convert_linewidth_to_poly(gdf: GeoDataFrame) -> tuple[GeoDataFrame, GeoDataFrame]:
+    """Split aeroway features into buffered polygons and fallback lines.
+
+    Features with numeric width tags are buffered into polygons (width/2 on each side).
+    Features without usable widths remain in the returned lines GeoDataFrame.
+    """
+    if gdf is None or gdf.empty:
+        empty = gpd.GeoDataFrame(geometry=[], crs=getattr(gdf, "crs", None))
+        return empty, empty
+
+    source = gdf.copy()
+    source = source[source.geometry.notnull()].copy()
+    if source.empty:
+        empty = gpd.GeoDataFrame(geometry=[], crs=gdf.crs)
+        return empty, empty
+
+    def _parse_width_m(value) -> float | None:
+        if value is None:
+            return None
+        if isinstance(value, list):
+            value = value[0] if value else None
+        if value is None:
+            return None
+        try:
+            if isinstance(value, str):
+                cleaned = value.strip().lower().replace('meters', '').replace('meter', '').replace('m', '').strip()
+                return float(cleaned) if cleaned else None
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    projected = ox.projection.project_gdf(source)
+    widths = projected.get('width')
+    if widths is None:
+        projected['width_m'] = np.nan
+    else:
+        projected['width_m'] = widths.apply(_parse_width_m)
+
+    poly_rows = projected[projected['width_m'].notna() & (projected['width_m'] > 0)].copy()
+    line_rows = projected[~(projected['width_m'].notna() & (projected['width_m'] > 0))].copy()
+
+    if not poly_rows.empty:
+        poly_rows['geometry'] = poly_rows.geometry.buffer(poly_rows['width_m'] / 2.0, cap_style=2, join_style=2)
+        poly_rows = poly_rows.drop(columns=['width_m'])
+
+    line_rows = line_rows.drop(columns=['width_m'])
+
+    polygons = ox.projection.project_gdf(poly_rows, to_latlong=True) if not poly_rows.empty else gpd.GeoDataFrame(columns=source.columns, geometry=[], crs=source.crs)
+    lines = ox.projection.project_gdf(line_rows, to_latlong=True) if not line_rows.empty else gpd.GeoDataFrame(columns=source.columns, geometry=[], crs=source.crs)
+
+    return polygons, lines
