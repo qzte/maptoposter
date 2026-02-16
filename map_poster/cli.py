@@ -5,6 +5,34 @@ import zipfile
 import urllib.request
 
 
+def resolve_layer_order(layers):
+    """Return layer names in a fetch-safe order.
+
+    Layers can depend on data produced by other layers (for example, the
+    ``ocean`` layer uses ``coastline`` geometries as an input mask). This
+    helper keeps those dependencies in the right order while preserving the
+    relative order of all other layers from the input mapping.
+    """
+    if not layers:
+        return []
+
+    ordered = list(layers.keys())
+
+    # Ensure dependent layers are fetched after their prerequisites.
+    dependency_pairs = [
+        ("ocean", "coastline"),
+    ]
+
+    for layer, prerequisite in dependency_pairs:
+        if layer not in ordered or prerequisite not in ordered:
+            continue
+        if ordered.index(prerequisite) > ordered.index(layer):
+            ordered.remove(prerequisite)
+            ordered.insert(ordered.index(layer), prerequisite)
+
+    return ordered
+
+
 def print_examples():
     """Print usage examples."""
     print("""
