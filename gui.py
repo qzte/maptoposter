@@ -788,7 +788,7 @@ class PosterApp:
             for theme_name in themes_to_generate:
                 self.log(f"Gerando tema: {theme_name}")
                 poster.THEME = load_theme(theme_name)
-                output_file = poster.generate_output_filename(city, theme_name, output_format)
+                output_file = poster.generate_output_filename(city, country, theme_name, output_format)
                 text_options = {
                     "show_city": self.show_city_var.get(),
                     "show_country": self.show_country_var.get(),
@@ -808,6 +808,11 @@ class PosterApp:
                     "attr_pos": (float(self.attr_x_var.get()), float(self.attr_y_var.get())),
                 }
                 gradient_orientation = self._get_gradient_orientation()
+                gradient_sides_map = {
+                    "vertical": ["bottom", "top"],
+                    "horizontal": ["left", "right"],
+                    "both": ["bottom", "top", "left", "right"],
+                }
                 poster_kwargs = {
                     "width": width,
                     "height": height,
@@ -815,11 +820,12 @@ class PosterApp:
                     "country_label": self.country_label_var.get().strip() or None,
                     "name_label": self.name_label_var.get().strip() or None,
                     "refresh_cache": self.refresh_cache_var.get(),
-                    "enabled_layers": selected_layers,
-                    "gradient_enabled": self.gradient_enabled_var.get(),
-                    "gradient_percent": gradient_percent,
-                    "gradient_orientation": gradient_orientation,
                 }
+                if self.gradient_enabled_var.get():
+                    poster_kwargs["gradient_sides"] = gradient_sides_map.get(gradient_orientation, ["bottom", "top"])
+                else:
+                    poster_kwargs["gradient_sides"] = None
+                poster_kwargs["fade_fraction"] = gradient_percent / 100
                 if self.poi_enabled_var.get():
                     poi_coords = self._parse_poi_location(self.poi_location_var.get())
                     poi_size = float(self.poi_size_var.get())
@@ -837,6 +843,12 @@ class PosterApp:
                 )
                 if "road_types" in create_sig.parameters or has_kwargs:
                     poster_kwargs["road_types"] = selected_road_types
+                elif selected_road_types:
+                    self.log("Aviso: esta versão do gerador não suporta filtro de tipos de rua na GUI.")
+                if "enabled_layers" in create_sig.parameters or has_kwargs:
+                    poster_kwargs["enabled_layers"] = selected_layers
+                elif selected_layers:
+                    self.log("Aviso: esta versão do gerador não suporta filtro de camadas OSM na GUI.")
                 if "text_options" in create_sig.parameters or has_kwargs:
                     poster_kwargs["text_options"] = text_options
                 poster.create_poster(
