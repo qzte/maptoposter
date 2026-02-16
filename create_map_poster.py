@@ -14,7 +14,10 @@ from map_poster.font_management import add_text, add_attribution
 from map_poster.theme_management import load_theme
 from map_poster.fetch import fetch_features, fetch_graph, fetch_ocean_polygons, get_coordinates, convert_linewidth_to_poly
 from pathlib import Path
-from lat_lon_parser import parse
+try:
+    from lat_lon_parser import parse
+except ModuleNotFoundError:
+    from map_poster.coordinates import parse_coordinate as parse
 import geopandas as gpd
 import networkx as nx
 import toml
