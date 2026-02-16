@@ -1,7 +1,6 @@
 import osmnx as ox
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from matplotlib.path import Path as MplPath
 import numpy as np
 from tqdm import tqdm
 import os
@@ -13,134 +12,88 @@ from tqdm import tqdm
 import map_poster.cli
 from map_poster.font_management import add_text, add_attribution
 from map_poster.theme_management import load_theme
-from map_poster.fetch import fetch_features, fetch_graph, fetch_ocean_polygons, get_coordinates
+from map_poster.fetch import fetch_features, fetch_graph, fetch_ocean_polygons, get_coordinates, convert_linewidth_to_poly
 from pathlib import Path
 from lat_lon_parser import parse
-from svgpath2mpl import parse_path
-import xml.etree.ElementTree as ET
+import geopandas as gpd
+import networkx as nx
+import toml
 
 POSTERS_DIR = "posters"
 WATER_POLY_DIR = Path("cache/water_polygons")
 
-THEME = dict[str, str]()  # Will be loaded later
+THEME = dict[str, str]()
 
-def _load_svg_marker(svg_path: str) -> MplPath:
-    path = Path(svg_path).expanduser()
-    if not path.exists():
-        raise ValueError(f"Arquivo SVG não encontrado: {svg_path}")
-    try:
-        svg_root = ET.parse(path).getroot()
-    except ET.ParseError as exc:
-        raise ValueError("Não foi possível ler o SVG do marcador.") from exc
+CONFIG_FILE = "poster_config.toml"
+config = toml.load(CONFIG_FILE)
+# Transform flattened 'tags_*' into nested 'tags' dict
+for layer_name, layer_conf in config.get("layers", {}).items():
+    tags = {}
+    for key, value in list(layer_conf.items()):  # list() to allow modification during iteration
+        if key.startswith("tags_") and value is not None:
+            tag_key = key[5:]  # remove 'tags_' prefix
+            tags[tag_key] = value
+            del layer_conf[key]  # remove flattened key
+    if tags:
+        layer_conf["tags"] = tags
 
-    svg_path_element = None
-    for element in svg_root.iter():
-        if element.tag.endswith("path") and element.get("d"):
-            svg_path_element = element
-            break
 
-    if svg_path_element is None:
-        raise ValueError("O SVG precisa ter ao menos um elemento <path>.")
+DEFAULTS = config["defaults"]
+LAYERS = config["layers"]
+ROAD_STYLES = config["road_styles"]
 
-    mpl_path = parse_path(svg_path_element.get("d", ""))
-    vertices = mpl_path.vertices
-    min_xy = vertices.min(axis=0)
-    max_xy = vertices.max(axis=0)
-    size = max(max_xy - min_xy)
-    if size == 0:
-        raise ValueError("O caminho do SVG do marcador é inválido.")
-    centered = vertices - (min_xy + max_xy) / 2
-    normalized = -centered / size
-    return MplPath(normalized, mpl_path.codes)
-
-def generate_output_filename(city, theme_name, output_format):
+def generate_output_filename(city, country, theme_name, output_format):
     """
     Generate unique output filename with city, theme, and datetime.
     """
-    if not os.path.exists(os.path.join(POSTERS_DIR, city)):
-        os.makedirs(os.path.join(POSTERS_DIR, city))
+    if not os.path.exists(os.path.join(POSTERS_DIR, country, city)):
+        os.makedirs(os.path.join(POSTERS_DIR, country, city))
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     city_slug = city.lower().replace(' ', '_')
     ext = output_format.lower()
     filename = f"{city_slug}_{theme_name}_{timestamp}.{ext}"
-    return os.path.join(POSTERS_DIR, city, filename)
+    return os.path.join(POSTERS_DIR, country, city, filename)
 
-def create_gradient_fade(
-    ax,
-    color,
-    location="bottom",
-    orientation="vertical",
-    zorder=10,
-    extent_ratio=0.25,
-):
+
+def create_gradient_fade(ax, color, location='bottom', zorder=10, fade_fraction=0.25):
     """
-    Creates a fade effect on the selected edge(s) of the map.
+    Creates a fade effect on a specified side of the map:
+    'bottom', 'top', 'left', or 'right'.
+
+    fade_fraction: fraction of axis to apply the fade (default 0.25)
     """
-    extent_ratio = max(0.0, min(extent_ratio, 0.5))
-    orientation = orientation.lower()
-
-    if orientation == "horizontal":
-        vals = np.linspace(0, 1, 256)
-        gradient = np.tile(vals, (2, 1))
-    else:
-        vals = np.linspace(0, 1, 256).reshape(-1, 1)
-        gradient = np.hstack((vals, vals))
-
     rgb = mcolors.to_rgb(color)
+
+    # Create RGBA colormap: alpha goes from 1->0 or 0->1 depending on direction
+    alphas = np.linspace(1, 0, 256) if location in ['bottom', 'left'] else np.linspace(0, 1, 256)
     my_colors = np.zeros((256, 4))
-    my_colors[:, 0] = rgb[0]
-    my_colors[:, 1] = rgb[1]
-    my_colors[:, 2] = rgb[2]
+    my_colors[:, :3] = rgb
+    my_colors[:, 3] = alphas
+    cmap = mcolors.ListedColormap(my_colors)
 
-    if orientation == "horizontal":
-        if location == "left":
-            my_colors[:, 3] = np.linspace(1, 0, 256)
-            extent_x_start = 0.0
-            extent_x_end = extent_ratio
-        else:
-            my_colors[:, 3] = np.linspace(0, 1, 256)
-            extent_x_start = 1.0 - extent_ratio
-            extent_x_end = 1.0
-    else:
-        if location == "bottom":
-            my_colors[:, 3] = np.linspace(1, 0, 256)
-            extent_y_start = 0.0
-            extent_y_end = extent_ratio
-        else:
-            my_colors[:, 3] = np.linspace(0, 1, 256)
-            extent_y_start = 1.0 - extent_ratio
-            extent_y_end = 1.0
+    # Get axis limits
+    x0, x1 = ax.get_xlim()
+    y0, y1 = ax.get_ylim()
+    dx = x1 - x0
+    dy = y1 - y0
 
-    custom_cmap = mcolors.ListedColormap(my_colors)
+    # Determine extent and gradient orientation
+    if location in ['bottom', 'top']:
+        gradient = np.linspace(0, 1, 256).reshape(-1, 1)
+        if location == 'bottom':
+            extent = [x0, x1, y0, y0 + fade_fraction * dy]
+        else:  # top
+            extent = [x0, x1, y1 - fade_fraction * dy, y1]
+    else:  # left or right
+        gradient = np.linspace(0, 1, 256).reshape(1, -1)
+        if location == 'left':
+            extent = [x0, x0 + fade_fraction * dx, y0, y1]
+        else:  # right
+            extent = [x1 - fade_fraction * dx, x1, y0, y1]
 
-    xlim = ax.get_xlim()
-    ylim = ax.get_ylim()
+    ax.imshow(gradient, extent=extent, aspect='auto', cmap=cmap, zorder=zorder, origin='lower')
 
-    if orientation == "horizontal":
-        x_range = xlim[1] - xlim[0]
-        x_left = xlim[0] + x_range * extent_x_start
-        x_right = xlim[0] + x_range * extent_x_end
-        ax.imshow(
-            gradient,
-            extent=[x_left, x_right, ylim[0], ylim[1]],
-            aspect="auto",
-            cmap=custom_cmap,
-            zorder=zorder,
-            origin="lower",
-        )
-    else:
-        y_range = ylim[1] - ylim[0]
-        y_bottom = ylim[0] + y_range * extent_y_start
-        y_top = ylim[0] + y_range * extent_y_end
-        ax.imshow(
-            gradient,
-            extent=[xlim[0], xlim[1], y_bottom, y_top],
-            aspect="auto",
-            cmap=custom_cmap,
-            zorder=zorder,
-            origin="lower",
-        )
     
 def get_crop_limits(G_proj, center_lat_lon, fig, dist):
     """
@@ -150,13 +103,7 @@ def get_crop_limits(G_proj, center_lat_lon, fig, dist):
     lat, lon = center_lat_lon
 
     # Project center point into graph CRS
-    center = (
-        ox.projection.project_geometry(
-            Point(lon, lat),
-            crs="EPSG:4326",
-            to_crs=G_proj.graph["crs"]
-        )[0]
-    )
+    center = (ox.projection.project_geometry(Point(lon, lat), crs="EPSG:4326", to_crs=G_proj.graph["crs"])[0])
     center_x, center_y = center.x, center.y
 
     fig_width, fig_height = fig.get_size_inches()
@@ -172,10 +119,14 @@ def get_crop_limits(G_proj, center_lat_lon, fig, dist):
     else:           # portrait → reduce width
         half_x = half_y * aspect
 
-    return (
-        (center_x - half_x, center_x + half_x),
-        (center_y - half_y, center_y + half_y),
-    )
+    return ((center_x - half_x, center_x + half_x),(center_y - half_y, center_y + half_y))
+
+def rotate_geometry(gdf, angle, origin):
+    """Clockwise rotation"""
+    if angle == 0: return gdf
+    gdf = gdf.copy()
+    gdf["geometry"] = gdf.rotate(-angle, origin=origin)
+    return gdf
 
 def calculate_line_scaling(crop_xlim, crop_ylim, width, dpi, px_per_m_ref):
     # --- Calculate linewidth scale factor ---
@@ -197,117 +148,52 @@ def calculate_line_scaling(crop_xlim, crop_ylim, width, dpi, px_per_m_ref):
     return px_per_m_cur / px_per_m_ref
     
 
-def create_poster(
-    city,
-    country,
-    point,
-    dist,
-    output_file,
-    output_format,
-    width=12,
-    height=16,
-    dpi=300,
-    px_per_m_ref=0.096,
-    country_label=None,
-    name_label=None,
-    refresh_cache=False,
-    display_city=None,
-    display_country=None,
-    fonts=None,
-    pad_inches=0.05,
-    enabled_layers=None,
-    road_types=None,
-    text_options=None,
-    poi_options=None,
-    gradient_enabled=True,
-    gradient_percent=25.0,
-    gradient_orientation="vertical",
-):
+def create_poster(city, country, point, dist, output_file, output_format, width=12, height=16, dpi=300, px_per_m_ref=0.096, country_label=None, name_label=None, refresh_cache=False, display_city=None, display_country=None, fonts=None, pad_inches=0.05, rotation=0, gradient_sides=['bottom', 'top'], fade_fraction=0.25):
     print(f"\nGenerating map for {city}, {country}...")
 
     #value init
     display_city = display_city or name_label or city
     display_country = display_country or country_label or country
-    compensated_dist = dist * (max(height, width) / min(height, width))/4 # To compensate for viewport crop
+    #compensated_dist = dist * (max(height, width) / min(height, width))/4 # To compensate for viewport crop
+    # We multiply by 1.5 to provide a safe margin for the diagonals after rotation
+    rotation_buffer = 1.5 if rotation != 0 else 1.0
+    compensated_dist = dist * (max(height, width) / min(height, width)) / 4 * rotation_buffer
 
     # 1. Fetch Street Network and layers
-    # Define layers and their specific tags
-    supported_layers = {
-        "roads",
-        "water",
-        "rivers",
-        "oceans",
-        "forests",
-        "green_spaces",
-        "farmland",
-        "railways",
-        "subtram",
-    }
-    enabled_set = None
-    if isinstance(enabled_layers, list):
-        enabled_set = {layer for layer in enabled_layers if isinstance(layer, str)}
-        enabled_set = enabled_set & supported_layers
-    if enabled_set is None:
-        enabled_set = set(supported_layers)
-
-    common_args = (point, compensated_dist, refresh_cache)
-    layers = [("street network", fetch_graph, {})]
-    if "water" in enabled_set:
-        layers.append(
-            ("water", fetch_features, {"tags": {'natural': ['water', 'bay', 'strait'], 'waterway': ['riverbank', 'dock', 'canal']}, "name": 'water'})
-        )
-    if "rivers" in enabled_set:
-        layers.append(
-            ("rivers", fetch_features, {"tags": {'waterway': ['river']}, "name": 'rivers'})
-        )
-    if "oceans" in enabled_set:
-        layers.append(
-            ("coastline", fetch_features, {"tags": {'natural': 'coastline'}, "name": 'coast'})
-        )
-        layers.append(
-            ("oceans", fetch_ocean_polygons, {"coastline": lambda results: results.get("coastline")})
-        )
-    if "forests" in enabled_set:
-        layers.append(
-            ("forests", fetch_features, {"tags": {"natural": ["wood"], "landuse": ["forest", "logging"]}, "name": "forest"})
-        )
-    if "green_spaces" in enabled_set:
-        layers.append(
-            ("green spaces", fetch_features, {"tags": {"natural": ["grassland"], "landuse": ["grass", "recreation_ground", "religious", "village_green", "greenery", "greenfield", "meadow", "vineyard"], "leisure": ["park", "garden"]}, "name": "grass"})
-        )
-    if "farmland" in enabled_set:
-        layers.append(
-            ("farmland", fetch_features, {"tags": {"landuse": ["farmland"], "natural": ["heath", "scrub"]}, "name": "farmland"})
-        )
-    if "railways" in enabled_set:
-        layers.append(
-            ("railways", fetch_features, {"tags": {"railway": ["rail", "narrow_gauge", "monorail", "light_rail"]}, "name": "railways"})
-        )
-    if "subtram" in enabled_set:
-        layers.append(
-            ("subtram", fetch_features, {"tags": {"railway": ["subway", "funicular", "tram"]}, "name": "subtram"})
-        )
-
     results = {}
-    with tqdm(total=len(layers), desc="Map data", ncols=80, bar_format='{desc:30.30} {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}') as pbar:
-        for name, func, extra_kwargs in layers:
-            pbar.set_description(f"Downloading {name}")
-            # Evaluate dynamic kwargs if they are lambdas
-            kwargs = {k: v(results) if callable(v) else v for k, v in extra_kwargs.items()}
-            results[name] = func(*common_args, **kwargs)
+    with tqdm(total=len(LAYERS), desc="Map data", ncols=80, bar_format='{desc:30.30} {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}') as pbar:
+        ordered_layers = map_poster.cli.resolve_layer_order(LAYERS)     #Ensure layers are fetched in a safe order
+        for layer_name in ordered_layers:
+            layer_conf = LAYERS[layer_name]
+            pbar.set_description(f"Downloading {layer_name}")
+            fetch_func = globals()[layer_conf["fetch_func"]]  # fetch_features / fetch_graph / fetch_ocean_polygons
+
+            # Only fetch_features needs tags + name
+            if fetch_func == fetch_features:
+                tags = layer_conf.get("tags", {})
+                results[layer_name] = fetch_func(point, compensated_dist, refresh_cache, tags=tags, name=layer_name)
+            elif fetch_func == fetch_ocean_polygons:
+                # some layers like oceans may want dynamic kwargs
+                coastline = results.get("coastline")
+                results[layer_name] = fetch_func(point,compensated_dist,refresh_cache,coastline=coastline)
+
+            else:  # fetch_graph
+                results[layer_name] = fetch_func(point, compensated_dist, refresh_cache)
+
             pbar.update(1)
 
-    G = results["street network"]
+    G = results["street_network"]
     if G is None: raise RuntimeError("Failed to retrieve street network data.")
 
-    water = results.get("water")
-    rivers = results.get("rivers")
-    oceans = results.get("oceans")
-    forests = results.get("forests")
-    grass = results.get("green spaces")
-    farmland = results.get("farmland")
-    railways = results.get("railways")
-    subtram = results.get("subtram")
+    # Handle aeroway runway convertion from line+width to polygons
+    aeroway = results.pop("aeroway", None)
+    if aeroway is not None:
+        polygons, lines = convert_linewidth_to_poly(aeroway)
+        conf = LAYERS.pop("aeroway", {})
+
+        for suffix, data in {"aeroway_polygons": polygons, "aeroway_lines": lines,}.items():
+            LAYERS[suffix] = {**conf}
+            results[suffix] = data
 
     # 2. Setup Plot
     print("Rendering map...")
@@ -319,9 +205,10 @@ def create_poster(
 
     # Project graph to a metric CRS so distances and aspect are linear (meters)
     G_proj = ox.project_graph(G)
+    center_pt = ox.projection.project_geometry(Point(point[1], point[0]), to_crs=G_proj.graph["crs"])[0]
 
     # Determine cropping limits to maintain the poster aspect ratio
-    crop_xlim, crop_ylim = get_crop_limits(G_proj, point, fig, compensated_dist)
+    crop_xlim, crop_ylim = get_crop_limits(G_proj, point, fig, compensated_dist / rotation_buffer)
     ax.set_xlim(crop_xlim)
     ax.set_ylim(crop_ylim) 
 
@@ -329,235 +216,84 @@ def create_poster(
     line_scale_factor = calculate_line_scaling(crop_xlim, crop_ylim, width, dpi, px_per_m_ref)
     
     # 3. Plot Layers
-    # Layer 1: Polygons (filter to only plot polygon/multipolygon geometries, not points)
     # --- Layer definitions for plotting ---
     print("Adding layers...")
-    plot_layers = [
-      # (layer_key, layer_data,   allowed_geom_types,                  facecolor / color,                                  linewidth,   zorder)
-        ("ocean",   oceans,       ['Polygon','MultiPolygon'],          THEME['water'],                                     None,        0, "oceans"),
-        ("water",   water,        ['Polygon','MultiPolygon'],          THEME['water'],                                     None,        2, "water"),
-        ("river",   rivers,       ['LineString','MultiLineString'],    THEME['water'],                                     2.0,         3, "rivers"),
-        ("forest",  forests,      ['Polygon','MultiPolygon'],          THEME.get('forest', THEME.get('parks')),            None,        1, "forests"),
-        ("grass",   grass,        ['Polygon','MultiPolygon'],          THEME.get('grass', THEME.get('parks')),             None,        1, "green_spaces"),
-        ("farmland",farmland,     ['Polygon','MultiPolygon'],          THEME.get('farmland', THEME.get('parks')),          None,        1, "farmland"),
-        ("railway", railways,     ['LineString','MultiLineString'],    THEME.get('railway', THEME.get('road_primary')),    1.0,         6.2, "railways"),
-        ("subtram", subtram,      ['LineString','MultiLineString'],    THEME.get('subtram', THEME.get('road_primary')),    0.8,         6, "subtram")
-    ]
 
     # --- Plot all layers in a loop ---
-    for layer_key, layer_data, geom_types, color, lw, z, layer_toggle in plot_layers:
-        if layer_toggle not in enabled_set:
+    for layer_name, layer_conf in LAYERS.items():
+        layer_data = results.get(layer_name)
+        if layer_data is None or (isinstance(layer_data, gpd.GeoDataFrame) and layer_data.empty) or isinstance(layer_data, nx.MultiDiGraph):
+            continue  # skip plotting here; ie roads handled separately
+        filtered = layer_data[layer_data.geometry.type.isin(['Polygon','MultiPolygon','LineString','MultiLineString'])]  # Used to filter out points
+        if filtered.empty:
             continue
-        if layer_data is not None and not layer_data.empty:
-            filtered = layer_data[layer_data.geometry.type.isin(geom_types)]
-            if not filtered.empty:
-                try:
-                    projected = ox.projection.project_gdf(filtered)
-                except Exception:
-                    projected = filtered.to_crs(G_proj.graph['crs'])
 
-                # Plot
-                if 'Polygon' in geom_types or 'MultiPolygon' in geom_types:
-                    projected.plot(ax=ax, facecolor=color, edgecolor='none', zorder=z)
-                else:  # Lines
-                    projected.plot(ax=ax, color=color, linewidth=lw*line_scale_factor, zorder=z, alpha=0.7)
-                    ax.collections[-1].set_capstyle("round")  # Round end of line
-                    core_key = f"{layer_key}_core"
-                    if core_key in THEME:
-                        # Extra extra core line (good for adding a "glowing effect")
-                        projected.plot(ax=ax, color=THEME[core_key], linewidth=0.2*line_scale_factor, zorder=z+0.1, alpha=0.7)
-                        ax.collections[-1].set_capstyle("round")  # Round end of line
+        try:
+            projected = ox.projection.project_gdf(filtered)
+        except Exception:
+            projected = filtered.to_crs(G_proj.graph['crs'])
+        projected = rotate_geometry(projected, rotation, center_pt)
 
-    # Layer 2: Roads with hierarchy coloring, width, and order
-    if "roads" in enabled_set:
-        print("Applying road hierarchy...")
-        edges = ox.graph_to_gdfs(G_proj, nodes=False, edges=True)    # Convert graph edges to GeoDataFrame
+        color = THEME.get(layer_conf.get("color_theme_key")) or THEME.get(layer_conf.get("fallback_keys")) or THEME.get("bg")
+        lw = layer_conf.get("linewidth", 0)
+        z = layer_conf.get("zorder", 1)
+        alpha = layer_conf.get("alpha", 1)
 
-        # Normalize highway values (take first element if list, fallback to 'unclassified')
-        edges["highway_norm"] = edges["highway"].apply(lambda h: (h[0] if isinstance(h, list) and h else h) or 'unclassified')
-        if isinstance(road_types, list):
-            road_set = {road for road in road_types if isinstance(road, str)}
-            if not road_set:
-                print("No road types selected; skipping roads.")
-                edges = edges.iloc[0:0]
-            else:
-                edges = edges[edges["highway_norm"].isin(road_set)]
-
-        # Define a road style library
-        ROAD_STYLES = {
-            'path':           {'order': 0, 'theme_key': 'road_track', 'width': 0.1},
-            'track':          {'order': 0, 'theme_key': 'road_track', 'width': 0.1},
-            'pedestrian':     {'order': 0, 'theme_key': 'road_track', 'width': 0.1},
-            "footway":        {'order': 0, 'theme_key': 'road_track', 'width': 0.1},
-            "cycleway":       {'order': 0, 'theme_key': 'road_track', 'width': 0.1},
-            'service':        {'order': 1, 'theme_key': 'road_service', 'width': 0.4},
-            'residential':    {'order': 2, 'theme_key': 'road_residential', 'width': 0.4},
-            'living_street':  {'order': 2, 'theme_key': 'road_residential', 'width': 0.4},
-            'unclassified':   {'order': 2, 'theme_key': 'road_residential', 'width': 0.4},
-            'tertiary':       {'order': 3, 'theme_key': 'road_tertiary', 'width': 0.6},
-            'tertiary_link':  {'order': 3, 'theme_key': 'road_tertiary', 'width': 0.6},
-            'secondary':      {'order': 4, 'theme_key': 'road_secondary', 'width': 0.8},
-            'secondary_link': {'order': 4, 'theme_key': 'road_secondary', 'width': 0.8},
-            'primary':        {'order': 5, 'theme_key': 'road_primary', 'width': 1.0},
-            'primary_link':   {'order': 5, 'theme_key': 'road_primary', 'width': 1.0},
-            'trunk':          {'order': 6, 'theme_key': 'road_primary', 'width': 1.0},
-            'trunk_link':     {'order': 6, 'theme_key': 'road_primary', 'width': 1.0},
-            'motorway':       {'order': 7, 'theme_key': 'road_motorway', 'width': 1.2},
-            'motorway_link':  {'order': 7, 'theme_key': 'road_motorway', 'width': 1.2},
-        }
-
-        if not edges.empty:
-            # Apply styles to edges
-            edges["style"] = edges["highway_norm"].map(lambda h: ROAD_STYLES.get(h))
-            edges["draw_order"] = edges["style"].map(lambda s: s["order"] if s else 1)
-            edges["width"]      = edges["style"].map(lambda s: s["width"] if s else 0.4)
-            edges["theme_key"]  = edges["style"].map(lambda s: s["theme_key"] if s else "road_default")
-            edges["color"]      = edges["theme_key"].map(lambda k: THEME.get(k, THEME["road_default"]))
-
-            # Draw roads per hierarchy level
-            for order in sorted(edges["draw_order"].unique()):
-                subset = edges[edges["draw_order"] == order]
-
-                # Base pass
-                subset.plot(ax=ax, color=subset["color"], linewidth=subset["width"] * line_scale_factor, zorder=5 + order * 0.01)
+        if projected.geometry.type.isin(['Polygon','MultiPolygon']).any():
+            projected.plot(ax=ax, facecolor=color, linewidth=lw*line_scale_factor, edgecolor=THEME.get(layer_conf.get("outline",""), "none"), zorder=z, alpha=alpha)
+        else:
+            projected.plot(ax=ax, color=color, linewidth=lw*line_scale_factor, zorder=z, alpha=alpha)
+            ax.collections[-1].set_capstyle("round")
+            core_key = f"{layer_conf['color_theme_key']}_core"
+            if core_key in THEME:
+                projected.plot(ax=ax, color=THEME[core_key], linewidth=0.2*line_scale_factor, zorder=z+0.1, alpha=alpha)
                 ax.collections[-1].set_capstyle("round")
 
-                # Extra core line if defined in THEME
-                core_key = f"{subset.iloc[0]['theme_key']}_core"
-                if core_key in THEME:
-                    subset.plot(ax=ax, color=THEME[core_key], linewidth=0.3 * subset["width"] * line_scale_factor, zorder=5 + order * 0.01 + 0.005, alpha=0.9) #add core lines in between defined road order
-                    ax.collections[-1].set_capstyle("round")
+    # Roads with hierarchy coloring, width, and order
+    print("Applying road hierarchy...")
+    edges = ox.graph_to_gdfs(G_proj, nodes=False, edges=True)    # Convert graph edges to GeoDataFrame
+    edges = rotate_geometry(edges, rotation, center_pt)
 
-    # Layer 3: Gradients
-    if gradient_enabled and gradient_percent:
-        extent_ratio = max(0.0, min(float(gradient_percent) / 100.0, 0.5))
-        orientation = str(gradient_orientation).lower()
-        if orientation == "horizontal":
-            create_gradient_fade(
-                ax,
-                THEME["gradient_color"],
-                location="left",
-                orientation="horizontal",
-                zorder=10,
-                extent_ratio=extent_ratio,
-            )
-            create_gradient_fade(
-                ax,
-                THEME["gradient_color"],
-                location="right",
-                orientation="horizontal",
-                zorder=10,
-                extent_ratio=extent_ratio,
-            )
-        elif orientation == "both":
-            create_gradient_fade(
-                ax,
-                THEME["gradient_color"],
-                location="bottom",
-                orientation="vertical",
-                zorder=10,
-                extent_ratio=extent_ratio,
-            )
-            create_gradient_fade(
-                ax,
-                THEME["gradient_color"],
-                location="top",
-                orientation="vertical",
-                zorder=10,
-                extent_ratio=extent_ratio,
-            )
-            create_gradient_fade(
-                ax,
-                THEME["gradient_color"],
-                location="left",
-                orientation="horizontal",
-                zorder=10,
-                extent_ratio=extent_ratio,
-            )
-            create_gradient_fade(
-                ax,
-                THEME["gradient_color"],
-                location="right",
-                orientation="horizontal",
-                zorder=10,
-                extent_ratio=extent_ratio,
-            )
-        else:
-            create_gradient_fade(
-                ax,
-                THEME["gradient_color"],
-                location="bottom",
-                orientation="vertical",
-                zorder=10,
-                extent_ratio=extent_ratio,
-            )
-            create_gradient_fade(
-                ax,
-                THEME["gradient_color"],
-                location="top",
-                orientation="vertical",
-                zorder=10,
-                extent_ratio=extent_ratio,
-            )
+    # Normalize highway values (take first element if list, fallback to 'unclassified')
+    edges["highway_norm"] = edges["highway"].apply(lambda h: (h[0] if isinstance(h, list) and h else h) or 'unclassified')
 
-    if isinstance(poi_options, dict) and poi_options.get("coords"):
-        poi_coords = poi_options["coords"]
-        try:
-            poi_lat, poi_lon = float(poi_coords[0]), float(poi_coords[1])
-        except (TypeError, ValueError, IndexError) as exc:
-            raise ValueError("Coordenadas do ponto de interesse inválidas.") from exc
-        poi_color = poi_options.get("color", "#e53935")
-        poi_size = float(poi_options.get("size", 12))
-        svg_path = poi_options.get("svg_path")
-        if isinstance(svg_path, str) and svg_path.strip():
-            marker = _load_svg_marker(svg_path.strip())
-        else:
-            icon_label = poi_options.get("icon", "Círculo")
-            marker_map = {
-                "Círculo": "o",
-                "Quadrado": "s",
-                "Estrela": "*",
-                "Losango": "D",
-                "Alfinete": "v",
-                "Casa": "⌂",
-                "Coração": r"$\u2665$",
-                "Pin": "P",
-                "X": "X",
-            }
-            marker = marker_map.get(icon_label, "o")
-        poi_point = ox.projection.project_geometry(
-            Point(poi_lon, poi_lat),
-            crs="EPSG:4326",
-            to_crs=G_proj.graph["crs"],
-        )[0]
-        ax.scatter(
-            [poi_point.x],
-            [poi_point.y],
-            s=poi_size**2,
-            marker=marker,
-            color=poi_color,
-            zorder=12,
-        )
+    # Apply styles to edges
+    edges["style"]      = edges["highway_norm"].map(lambda h: ROAD_STYLES.get(h, {'order':1,'theme_key':'road_default','width':0.4}))
+    edges["draw_order"] = edges["style"].map(lambda s: s["order"])
+    edges["width"]      = edges["style"].map(lambda s: s["width"])
+    edges["theme_key"]  = edges["style"].map(lambda s: s["theme_key"])
+    edges["color"]      = edges["theme_key"].map(lambda k: THEME.get(k, THEME["road_default"]))
+
+    # Draw roads per hierarchy level
+    for order in sorted(edges["draw_order"].unique()):
+        subset = edges[edges["draw_order"] == order]
+
+        # Base pass
+        subset.plot(ax=ax,color=subset["color"],linewidth=subset["width"] * line_scale_factor,zorder=5 + order * 0.01)
+        ax.collections[-1].set_capstyle("round")
+
+        # Extra core line if defined in THEME
+        core_key = f"{subset.iloc[0]['theme_key']}_core"
+        if core_key in THEME:
+            subset.plot(ax=ax,color=THEME[core_key],linewidth= 0.3 * subset["width"] * line_scale_factor,zorder=5 + order * 0.01 + 0.005, alpha = 0.9) #add core lines in between defined road order
+            ax.collections[-1].set_capstyle("round")
+
+    # 4. Add Gradients
+    #gradient_sides = ['bottom', 'top', 'left', 'right']  # choose which sides you want
+    if gradient_sides is not None:
+        print("Add fading gradients to poster")
+        for side in gradient_sides:
+            create_gradient_fade(ax, THEME['gradient_color'], location=side, zorder=10, fade_fraction = fade_fraction)
     
+    # 5. Typography - use custom fonts if provided, otherwise use default FONTS
+    print("Add Text elements")
     # Calculate scale factor based on smaller dimension (reference 12 inches)
     # This ensures text scales properly for both portrait and landscape orientations
     font_scale_factor = min(height, width) / 12.0
-
-    # 4. Typography - use custom fonts if provided, otherwise use default FONTS
-    add_text(
-        font_scale_factor,
-        display_city,
-        display_country,
-        point,
-        ax,
-        THEME['text'],
-        zorder=11,
-        fonts=fonts,
-        text_options=text_options,
-    )
-    add_attribution(ax, THEME['text'], zorder=11, text_options=text_options)
+    add_text(font_scale_factor, display_city, display_country, point, ax, THEME['text'], zorder=11, fonts=fonts)
+    add_attribution(ax, THEME['text'], zorder=11)
  
-    # 5. Save
+    # 6. Save
     print(f"Saving to {output_file}...")
 
     fmt = output_format.lower()
@@ -594,12 +330,16 @@ Examples:
     parser.add_argument('--theme', '-t', type=str, default='feature_based', help='Theme name (default: feature_based)')
     parser.add_argument('--all-themes', '--All-themes', dest='all_themes', action='store_true', help='Generate posters for all themes')
     parser.add_argument('--distance', '-d', type=int, default=29000, help='Map radius in meters (default: 29000)')
+    parser.add_argument('--rotation', '-r', type=float, default=0, help='clockwise rotation of the map (default: 0)')
     parser.add_argument('--width', '-W', type=float, default=12, help='Image width in inches (default: 12)')
     parser.add_argument('--height', '-H', type=float, default=16, help='Image height in inches (default: 16)')
     parser.add_argument('--px_per_m', '-P', type=float, default=0.096, help='Reference px per meter for line width scaling (default: 0.096)')
+    parser.add_argument('--gradient-sides', '-gs', type=str, default="bottom,top", help="Comma-separated sides to add gradient on. Options: bottom, top, left, right. Pass 'none' to skip gradients entirely.")
+    parser.add_argument('--fade-fraction', '-ff', type=float, default=0.25, help="Fraction of the map covered by gradient fade (default: 0.25)")
     parser.add_argument('--list-themes', action='store_true', help='List all available themes')
     parser.add_argument('--format', '-f', default='png', choices=['png', 'svg', 'pdf'],help='Output format for the poster (default: png)')
     parser.add_argument('--dpi', type=int, default=300, help='DPI value for saving as png (default: 300)')
+    parser.add_argument('--pad', type=float, default=0.05, help='add border around image, value in inches (default: 0.05)')
     parser.add_argument('--refresh-cache', '-R', action='store_true', help='Force a refresh of the cached data (default: False)')
     
     args = parser.parse_args()
@@ -619,10 +359,16 @@ Examples:
             print(f"✓ Coordinates: {', '.join([str(i) for i in coords])}")
         else:
             coords = get_coordinates(args.city, args.country, args.refresh_cache)
+
+        if args.gradient_sides.lower() == 'none':
+            gradient_sides = None
+        else:
+            gradient_sides = [s.strip() for s in args.gradient_sides.split(',')]
+
         for theme_name in themes_to_generate:
             THEME = load_theme(theme_name)
-            output_file = generate_output_filename(args.city, theme_name, args.format)
-            create_poster(args.city, args.country, coords, args.distance, output_file, args.format, args.width, args.height, dpi=args.dpi, px_per_m_ref=args.px_per_m, country_label=args.country_label, refresh_cache=args.refresh_cache)
+            output_file = generate_output_filename(args.city, args.country, theme_name, args.format)
+            create_poster(args.city, args.country, coords, args.distance, output_file, args.format, args.width, args.height, dpi=args.dpi, px_per_m_ref=args.px_per_m, country_label=args.country_label, refresh_cache=args.refresh_cache, pad_inches=args.pad, rotation=args.rotation, gradient_sides=gradient_sides, fade_fraction = args.fade_fraction)
         
         print("\n" + "=" * 50)
         print("✓ Poster generation complete!")
