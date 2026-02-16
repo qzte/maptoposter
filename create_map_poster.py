@@ -7,6 +7,7 @@ import os
 import sys
 from datetime import datetime
 import argparse
+import xml.etree.ElementTree as ET
 from shapely.geometry import Point
 from tqdm import tqdm
 import map_poster.cli
@@ -21,6 +22,9 @@ except ModuleNotFoundError:
 import geopandas as gpd
 import networkx as nx
 import toml
+from matplotlib.path import Path as MplPath
+from matplotlib.transforms import Affine2D
+from svgpath2mpl import parse_path
 
 POSTERS_DIR = "posters"
 WATER_POLY_DIR = Path("cache/water_polygons")
@@ -151,7 +155,33 @@ def calculate_line_scaling(crop_xlim, crop_ylim, width, dpi, px_per_m_ref):
     return px_per_m_cur / px_per_m_ref
     
 
-def create_poster(city, country, point, dist, output_file, output_format, width=12, height=16, dpi=300, px_per_m_ref=0.096, country_label=None, name_label=None, refresh_cache=False, display_city=None, display_country=None, fonts=None, pad_inches=0.05, rotation=0, gradient_sides=['bottom', 'top'], fade_fraction=0.25):
+def _build_svg_marker(svg_path):
+    if not svg_path:
+        return "o"
+    try:
+        tree = ET.parse(svg_path)
+        root = tree.getroot()
+        ns = {"svg": "http://www.w3.org/2000/svg"}
+        node = root.find(".//svg:path", ns)
+        if node is None:
+            node = root.find(".//path")
+        if node is None:
+            return "o"
+        path_data = node.attrib.get("d")
+        if not path_data:
+            return "o"
+        marker_path = parse_path(path_data)
+        bbox = marker_path.get_extents()
+        max_side = max(bbox.width, bbox.height)
+        if max_side == 0:
+            return "o"
+        transform = Affine2D().translate(-bbox.x0 - bbox.width / 2, -bbox.y0 - bbox.height / 2).scale(1.0 / max_side)
+        return MplPath(marker_path.transformed(transform).vertices, marker_path.codes)
+    except Exception:
+        return "o"
+
+
+def create_poster(city, country, point, dist, output_file, output_format, width=12, height=16, dpi=300, px_per_m_ref=0.096, country_label=None, name_label=None, refresh_cache=False, display_city=None, display_country=None, fonts=None, pad_inches=0.05, rotation=0, gradient_sides=['bottom', 'top'], fade_fraction=0.25, road_types=None, enabled_layers=None, text_options=None, poi_options=None):
     print(f"\nGenerating map for {city}, {country}...")
 
     #value init
@@ -164,9 +194,16 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
 
     # 1. Fetch Street Network and layers
     results = {}
+    selected_layers = set(enabled_layers or [])
+    if selected_layers:
+        selected_layers.add("street_network")
+
     with tqdm(total=len(LAYERS), desc="Map data", ncols=80, bar_format='{desc:30.30} {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}') as pbar:
         ordered_layers = map_poster.cli.resolve_layer_order(LAYERS)     #Ensure layers are fetched in a safe order
         for layer_name in ordered_layers:
+            if selected_layers and layer_name not in selected_layers:
+                pbar.update(1)
+                continue
             layer_conf = LAYERS[layer_name]
             pbar.set_description(f"Downloading {layer_name}")
             fetch_func = globals()[layer_conf["fetch_func"]]  # fetch_features / fetch_graph / fetch_ocean_polygons
@@ -192,7 +229,7 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
     aeroway = results.pop("aeroway", None)
     if aeroway is not None:
         polygons, lines = convert_linewidth_to_poly(aeroway)
-        conf = LAYERS.pop("aeroway", {})
+        conf = LAYERS.get("aeroway", {})
 
         for suffix, data in {"aeroway_polygons": polygons, "aeroway_lines": lines,}.items():
             LAYERS[suffix] = {**conf}
@@ -224,6 +261,8 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
 
     # --- Plot all layers in a loop ---
     for layer_name, layer_conf in LAYERS.items():
+        if selected_layers and layer_name not in selected_layers:
+            continue
         layer_data = results.get(layer_name)
         if layer_data is None or (isinstance(layer_data, gpd.GeoDataFrame) and layer_data.empty) or isinstance(layer_data, nx.MultiDiGraph):
             continue  # skip plotting here; ie roads handled separately
@@ -267,6 +306,10 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
     edges["theme_key"]  = edges["style"].map(lambda s: s["theme_key"])
     edges["color"]      = edges["theme_key"].map(lambda k: THEME.get(k, THEME["road_default"]))
 
+    selected_road_types = set(road_types or [])
+    if selected_road_types:
+        edges = edges[edges["highway_norm"].isin(selected_road_types)]
+
     # Draw roads per hierarchy level
     for order in sorted(edges["draw_order"].unique()):
         subset = edges[edges["draw_order"] == order]
@@ -281,6 +324,18 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
             subset.plot(ax=ax,color=THEME[core_key],linewidth= 0.3 * subset["width"] * line_scale_factor,zorder=5 + order * 0.01 + 0.005, alpha = 0.9) #add core lines in between defined road order
             ax.collections[-1].set_capstyle("round")
 
+    if poi_options and poi_options.get("coords"):
+        poi_lat, poi_lon = poi_options["coords"]
+        poi_pt = ox.projection.project_geometry(Point(poi_lon, poi_lat), crs="EPSG:4326", to_crs=G_proj.graph["crs"])[0]
+        poi_point = gpd.GeoSeries([Point(poi_pt.x, poi_pt.y)], crs=G_proj.graph["crs"])
+        poi_point = rotate_geometry(poi_point.to_frame(name="geometry"), rotation, center_pt)
+        marker_size = float(poi_options.get("size", 12)) ** 2
+        marker_color = poi_options.get("color") or "#e53935"
+        marker = _build_svg_marker(poi_options.get("svg_path", ""))
+        x = poi_point.geometry.iloc[0].x
+        y = poi_point.geometry.iloc[0].y
+        ax.scatter(x, y, s=marker_size, c=marker_color, marker=marker, zorder=9, edgecolors="none")
+
     # 4. Add Gradients
     #gradient_sides = ['bottom', 'top', 'left', 'right']  # choose which sides you want
     if gradient_sides is not None:
@@ -293,8 +348,8 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
     # Calculate scale factor based on smaller dimension (reference 12 inches)
     # This ensures text scales properly for both portrait and landscape orientations
     font_scale_factor = min(height, width) / 12.0
-    add_text(font_scale_factor, display_city, display_country, point, ax, THEME['text'], zorder=11, fonts=fonts)
-    add_attribution(ax, THEME['text'], zorder=11)
+    add_text(font_scale_factor, display_city, display_country, point, ax, THEME['text'], zorder=11, fonts=fonts, text_options=text_options)
+    add_attribution(ax, THEME['text'], zorder=11, text_options=text_options)
  
     # 6. Save
     print(f"Saving to {output_file}...")
