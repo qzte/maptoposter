@@ -24,7 +24,10 @@ import networkx as nx
 import toml
 from matplotlib.path import Path as MplPath
 from matplotlib.transforms import Affine2D
-from svgpath2mpl import parse_path
+try:
+    from svgpath2mpl import parse_path
+except ModuleNotFoundError:
+    parse_path = None
 
 POSTERS_DIR = "posters"
 WATER_POLY_DIR = Path("cache/water_polygons")
@@ -156,7 +159,7 @@ def calculate_line_scaling(crop_xlim, crop_ylim, width, dpi, px_per_m_ref):
     
 
 def _build_svg_marker(svg_path):
-    if not svg_path:
+    if not svg_path or parse_path is None:
         return "o"
     try:
         tree = ET.parse(svg_path)
