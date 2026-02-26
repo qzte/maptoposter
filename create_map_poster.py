@@ -179,7 +179,12 @@ def _build_svg_marker(svg_path):
         max_side = max(bbox.width, bbox.height)
         if max_side == 0:
             return "o"
-        transform = Affine2D().translate(-bbox.x0 - bbox.width / 2, -bbox.y0 - bbox.height / 2).scale(1.0 / max_side)
+        transform = (
+            Affine2D()
+            .translate(-bbox.x0 - bbox.width / 2, -bbox.y0 - bbox.height / 2)
+            .rotate_deg(180)
+            .scale(1.0 / max_side)
+        )
         return MplPath(marker_path.transformed(transform).vertices, marker_path.codes)
     except Exception:
         return "o"
