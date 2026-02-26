@@ -27,6 +27,8 @@ try:
 except ModuleNotFoundError:
     parse_path = None
 
+_SVG_MARKER_IMPORT_WARNING_SHOWN = False
+
 POSTERS_DIR = "posters"
 THEME = dict[str, str]()
 
@@ -154,6 +156,10 @@ def calculate_line_scaling(crop_xlim, crop_ylim, width, dpi, px_per_m_ref):
     
 
 def _build_svg_marker(svg_path):
+    global _SVG_MARKER_IMPORT_WARNING_SHOWN
+    if svg_path and parse_path is None and not _SVG_MARKER_IMPORT_WARNING_SHOWN:
+        print("[WARN] svgpath2mpl não está instalado; usando marcador circular padrão.")
+        _SVG_MARKER_IMPORT_WARNING_SHOWN = True
     if not svg_path or parse_path is None:
         return "o"
     try:
