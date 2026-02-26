@@ -2,7 +2,6 @@ import osmnx as ox
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import numpy as np
-from tqdm import tqdm
 import os
 import sys
 from datetime import datetime
@@ -14,7 +13,6 @@ import map_poster.cli
 from map_poster.font_management import add_text, add_attribution
 from map_poster.theme_management import load_theme
 from map_poster.fetch import fetch_features, fetch_graph, fetch_ocean_polygons, get_coordinates, convert_linewidth_to_poly
-from pathlib import Path
 try:
     from lat_lon_parser import parse
 except ModuleNotFoundError:
@@ -30,8 +28,6 @@ except ModuleNotFoundError:
     parse_path = None
 
 POSTERS_DIR = "posters"
-WATER_POLY_DIR = Path("cache/water_polygons")
-
 THEME = dict[str, str]()
 
 CONFIG_FILE = "poster_config.toml"
@@ -48,7 +44,6 @@ for layer_name, layer_conf in config.get("layers", {}).items():
         layer_conf["tags"] = tags
 
 
-DEFAULTS = config["defaults"]
 LAYERS = config["layers"]
 ROAD_STYLES = config["road_styles"]
 
@@ -197,6 +192,7 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
 
     # 1. Fetch Street Network and layers
     results = {}
+    plot_layers = dict(LAYERS)
     selected_layers = set(enabled_layers or [])
     if selected_layers:
         # Normalize known aliases against configured layer keys.
@@ -268,7 +264,7 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
         conf = LAYERS.get("aeroway", {})
 
         for suffix, data in {"aeroway_polygons": polygons, "aeroway_lines": lines,}.items():
-            LAYERS[suffix] = {**conf}
+            plot_layers[suffix] = {**conf}
             results[suffix] = data
 
     # 2. Setup Plot
@@ -296,7 +292,7 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
     print("Adding layers...")
 
     # --- Plot all layers in a loop ---
-    for layer_name, layer_conf in LAYERS.items():
+    for layer_name, layer_conf in plot_layers.items():
         if selected_layers and layer_name not in selected_layers:
             continue
         layer_data = results.get(layer_name)
