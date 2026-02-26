@@ -248,7 +248,9 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
                 results[layer_name] = fetch_func(point, compensated_dist, refresh_cache, tags=tags, name=layer_name)
             elif fetch_func == fetch_ocean_polygons:
                 # some layers like oceans may want dynamic kwargs
-                coastline = results.get("coastline") or results.get("coastlines")
+                coastline = results.get("coastline")
+                if coastline is None or (isinstance(coastline, gpd.GeoDataFrame) and coastline.empty):
+                    coastline = results.get("coastlines")
                 results[layer_name] = fetch_func(point,compensated_dist,refresh_cache,coastline=coastline)
 
             else:  # fetch_graph
@@ -261,7 +263,7 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
 
     # Handle aeroway runway convertion from line+width to polygons
     aeroway = results.pop("aeroway", None)
-    if aeroway is not None:
+    if aeroway is not None and not (isinstance(aeroway, gpd.GeoDataFrame) and aeroway.empty):
         polygons, lines = convert_linewidth_to_poly(aeroway)
         conf = LAYERS.get("aeroway", {})
 
